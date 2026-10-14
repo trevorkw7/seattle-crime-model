@@ -39,6 +39,17 @@ identical for all models). Full tables: [reports/backtest_results.md](reports/ba
 * **Data timeliness matters little at this resolution.** Re-training with
   hypothetical instant crime publication (lag 0 h vs 72 h) raises 24 h capture@10 %
   by ≈0.17 pp.
+* **Retraining fixes most of the drift.** Quarterly rolling-origin retraining keeps
+  LightGBM's gain (+0.21 / +0.29 pp at 6 / 24 h) and brings its 6 h pred/obs from
+  1.10 to 1.03.
+* **Sparse categories benefit more.** For located violent incidents (top 10 % of cells
+  hold 64 % of reports) LightGBM gains +0.77 pp [+0.23, +1.26] at 6 h and cuts
+  deviance by 4–6 %; all located offenses behave like property (+0.2–0.3 pp).
+  An occurrence-time property target (24 h) shows the same pattern (+0.26 pp,
+  −1.6 % deviance).
+* **Neural models (CPU, reduced scale) do not beat LightGBM.** TCN, ConvLSTM, ST-GNN,
+  an event-sequence transformer and a neural Hawkes process land between the seasonal
+  baseline and LightGBM on capture and deviance, but are better calibrated.
 
 ## What is in the repository
 

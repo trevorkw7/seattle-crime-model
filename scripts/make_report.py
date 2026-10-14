@@ -74,6 +74,8 @@ def main() -> None:
          "Every model in a table was scored on the identical hourly issue times × forecast cells. Capture@k% = share of reported incidents in the k% of cells ranked highest; "
          "Δ vs seasonal uses a paired day-block bootstrap. Lower is better for deviance/NLL/Brier/ECE; pred/obs is calibration-in-the-large (1 = unbiased).", ""]
     compact = {}
+    rank = {"property_report": 0, "property_report_resid": 1, "violent_report": 2, "all_located_report": 3, "property_offense": 4, "property_report_ablation": 5}
+    reps = dict(sorted(reps.items(), key=lambda kv: (rank.get(kv[0], 6), kv[0])))
     for name, rep in reps.items():
         if name.endswith("_rolling"):
             continue
