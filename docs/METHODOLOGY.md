@@ -5,7 +5,9 @@
 * **Spatial unit.** A square lattice in UTM 10N (EPSG:32610), 500 m cells by default
   (`grid.cell_size_m`, any size works). Of the 33 × 55 lattice, the 924 cells that
   intersect Seattle's city limits (or have ≥ 50 located incidents) are forecast;
-  they contain 99.9 % of located incidents since mid-2019.
+  they contain 99.9 % of located incidents since mid-2019. (The support criterion uses
+  all data through the snapshot; restricting it to pre-test data changes 4 of 924
+  cells, so the resulting selection effect on test metrics is negligible.)
 * **Temporal unit.** Forecasts are issued hourly. For issue time *t* and horizon
   *h* ∈ {1, 3, 6, 24} h the forecast window is [*t*, *t + h*).
 * **Target.** Number of distinct SPD incident *reports* (stable id `report_number`)

@@ -108,7 +108,7 @@ def main() -> None:
             L += [f"| {h} | {m} | {e['n_issue_times']} | {pct(e['capture_10'])} | {num(e['poisson_deviance'], 5)} | {num(e['calibration_in_large'], 3)} |" for h, m, e in sorted(ev_rows, key=lambda x: (int(x[0]), x[1]))]
             L.append("")
         if rep.get("lag_sensitivity"):
-            L += ["### Crime-data availability lag sensitivity (h = 24, LightGBM vs seasonal, test stride 6 h)", "",
+            L += ["### Crime-data availability lag sensitivity (h = 24, LightGBM re-trained per lag; test stride 6 h; seasonal shown with untuned defaults κ=26, σ=1)", "",
                   "| lag (h) | LightGBM capture@10% | seasonal capture@10% | LightGBM deviance | seasonal deviance |", "|---|---|---|---|---|"]
             for lag, r in sorted(rep["lag_sensitivity"].items(), key=lambda x: int(x[0])):
                 L.append(f"| {lag} | {pct(r['lgbm_capture_10'])} | {pct(r['seasonal_capture_10'])} | {num(r['lgbm_deviance'], 5)} | {num(r['seasonal_deviance'], 5)} |")

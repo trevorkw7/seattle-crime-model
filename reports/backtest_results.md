@@ -103,3 +103,74 @@ Provisional window (reports still arriving; not comparable to mature numbers):
 | UNKNOWN | 0 | – | – | 0.00688 |
 | West | 266831 | 1.041 | 44.7% | 0.55214 |
 
+## property · event time = report · run `ablation`
+
+Run `20261014T203806Z`; train issue times from 2019-07-01 (n=2000), validation from 2025-01-01, **test 2025-07-01 → 2026-09-14** (mature), provisional 2026-09-14 → 2026-10-14T18:00; 924 cells; crime availability lag 72 h; test stride 2 h; data versions 20261014T185811Z.
+
+| h | model | capture@5% | capture@10% [90% CI] | capture@20% | PAI@10 | Δcap@10 vs seasonal [90% CI] | hit@top-25 cells | Poisson dev. | NB NLL | Brier | ECE | pred/obs |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 6 | seasonal | 35.8% | 52.0% [51.6, 52.6] | 68.1% | 5.20 | – | 23.9% | 0.14691 | 0.09516 | 0.02005 | 0.00071 | 1.038 |
+| 6 | lgbm | 36.0% | **52.2% [51.7, 52.8]** | 68.3% | 5.22 | +0.20 pp [+0.08, +0.35] | 23.9% | **0.14660** | 0.09503 | 0.02006 | 0.00146 | 1.076 |
+| 24 | seasonal | 35.8% | 52.0% [51.6, 52.5] | 68.2% | 5.20 | – | 23.8% | 0.37623 | 0.26929 | 0.06147 | 0.00531 | 1.037 |
+| 24 | lgbm | 36.3% | **52.2% [51.8, 52.7]** | 68.3% | 5.22 | +0.27 pp [+0.15, +0.37] | 23.7% | **0.37455** | 0.26834 | 0.06142 | 0.00613 | 1.080 |
+
+Provisional window (reports still arriving; not comparable to mature numbers):
+
+| h | model | capture@10% | Poisson dev. | observed |
+|---|---|---|---|---|
+| 6 | lgbm | 55.5% | 0.16513 | 9444 |
+| 6 | seasonal | 56.0% | 0.16568 | 9444 |
+| 24 | lgbm | 55.5% | 0.39227 | 37014 |
+| 24 | seasonal | 56.1% | 0.39450 | 37014 |
+
+### Ablations (LightGBM retrained without a feature group)
+
+| h | removed | capture@10% | Δcap@10 (full − ablated) [90% CI] | Δ deviance (full − ablated) | event-window capture@10% |
+|---|---|---|---|---|---|
+| 6 | history_only | 52.1% | +0.08 pp [-0.00, +0.14] | -0.000451 | 52.5% |
+| 6 | no_calls | 52.1% | +0.06 pp [-0.01, +0.13] | -0.000205 | 52.5% |
+| 6 | no_events | 52.2% | -0.02 pp [-0.09, +0.05] | -0.000170 | 52.6% |
+| 6 | no_fire | 52.3% | -0.04 pp [-0.12, +0.03] | +0.000059 | 52.6% |
+| 6 | no_other_cats | 52.2% | +0.02 pp [-0.06, +0.09] | -0.000134 | 52.5% |
+| 6 | no_static | 52.1% | +0.07 pp [-0.00, +0.13] | -0.000132 | 52.5% |
+| 6 | no_transit | 52.3% | -0.05 pp [-0.12, +0.03] | -0.000006 | 52.6% |
+| 6 | no_weather | 52.2% | -0.01 pp [-0.09, +0.07] | +0.000051 | 52.5% |
+| 24 | history_only | 52.3% | -0.01 pp [-0.09, +0.06] | -0.000652 | 52.3% |
+| 24 | no_calls | 52.2% | +0.00 pp [-0.05, +0.06] | -0.000256 | 52.4% |
+| 24 | no_events | 52.3% | -0.03 pp [-0.09, +0.03] | -0.000407 | 52.4% |
+| 24 | no_fire | 52.2% | +0.04 pp [-0.02, +0.10] | -0.000247 | 52.3% |
+| 24 | no_other_cats | 52.2% | +0.04 pp [-0.02, +0.10] | +0.000001 | 52.3% |
+| 24 | no_static | 52.2% | +0.00 pp [-0.06, +0.07] | +0.000025 | 52.4% |
+| 24 | no_transit | 52.3% | -0.03 pp [-0.09, +0.03] | +0.000263 | 52.4% |
+| 24 | no_weather | 52.2% | -0.00 pp [-0.06, +0.06] | -0.000229 | 52.4% |
+
+### Windows overlapping major events (sports / ≥10k permits)
+
+| h | model | issue times | capture@10% | Poisson dev. | pred/obs |
+|---|---|---|---|---|---|
+| 6 | lgbm | 2155 | 52.7% | 0.13974 | 1.106 |
+| 6 | seasonal | 2155 | 52.2% | 0.14022 | 1.061 |
+| 24 | lgbm | 3236 | 52.4% | 0.37194 | 1.086 |
+| 24 | seasonal | 3236 | 51.9% | 0.37369 | 1.043 |
+
+### Crime-data availability lag sensitivity (h = 24, LightGBM re-trained per lag; test stride 6 h; seasonal shown with untuned defaults κ=26, σ=1)
+
+| lag (h) | LightGBM capture@10% | seasonal capture@10% | LightGBM deviance | seasonal deviance |
+|---|---|---|---|---|
+| 0 | 52.3% | 51.6% | 0.37470 | 0.38362 |
+| 24 | 52.3% | 51.6% | 0.37496 | 0.38370 |
+| 72 | 52.2% | 51.6% | 0.37451 | 0.38377 |
+| 168 | 52.1% | 51.6% | 0.37407 | 0.38420 |
+
+### Geographic stability (h = 24, LightGBM)
+
+| precinct | observed (summed over overlapping windows) | pred/obs | capture@10% within precinct | deviance |
+|---|---|---|---|---|
+| East | 88482 | 1.069 | 43.7% | 0.56080 |
+| North | 166518 | 1.090 | 44.0% | 0.38346 |
+| OOJ | 120 | 1.255 | 30.0% | 0.03130 |
+| South | 58550 | 1.130 | 40.3% | 0.30085 |
+| Southwest | 44340 | 1.119 | 46.5% | 0.24003 |
+| UNKNOWN | 0 | – | – | 0.00646 |
+| West | 133429 | 1.039 | 44.7% | 0.55105 |
+
