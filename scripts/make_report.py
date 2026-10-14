@@ -142,6 +142,10 @@ def main() -> None:
         L.append("")
         compact[name] = rep["pooled"]
     out = ROOT / "reports"
+    runs = out / "runs"
+    runs.mkdir(exist_ok=True)
+    for name, rep in reps.items():  # preserve raw run reports (small JSON) in git
+        (runs / f"{name}.json").write_text(json.dumps(rep, indent=1, default=str))
     (out / "backtest_results.md").write_text("\n".join(L) + "\n")
     (out / "backtest_results.json").write_text(json.dumps(compact, indent=1, default=str))
     print("\n".join(L)[:6000])
