@@ -18,7 +18,7 @@ tables, [runs/](runs/) for the raw run reports, and
 | Leakage-safe features (per-source availability lags, archived-forecast weather, ex-ante event attributes, schedule-publication times) | ✅ | `features.py`, `context.py`, `tests/test_leakage.py` |
 | Baselines (KDE hotspot, empirical-Bayes hour-of-week seasonal), Poisson & NB GLMs, LightGBM (+ seasonal-offset variant), CatBoost | ✅ trained and backtested | `reports/backtest_results.md` |
 | Identical-window chronological backtest, day-block bootstrap CIs, paired model deltas, ablations, data-timeliness counterfactual, rolling-origin retraining, event windows, precinct / month stability, calibration | ✅ | `src/seacrime/evaluation/` |
-| Neural research models: TCN, ConvLSTM, ST-GNN, event-sequence transformer, neural Hawkes | ✅ implemented; reduced-scale CPU comparison (§3.5) | `models/deep/`, `configs/gpu/`, `docs/GPU_RESEARCH.md` |
+| Neural research models: TCN, ConvLSTM, ST-GNN, event-sequence transformer, neural Hawkes | ✅ implemented; reduced-scale CPU comparison (§3.6) | `models/deep/`, `configs/gpu/`, `docs/GPU_RESEARCH.md` |
 | Prospective engine: forecasts frozen before their window (read-only file + SHA-256), model version, data snapshot ids and per-source feature cutoffs stored, maturity-aware re-scoring per snapshot, replay | ✅ | `prospective/`, `tests/test_end_to_end.py` |
 | Hourly cycle (incremental Fire 911, publisher-aware SPD refresh, MOS refresh, cubes, forecasts, scoring, export) with job log and health | ✅ executed locally (`20261014T213316Z`) | `prospective/cycle.py` |
 | Dashboard: heat map, horizon/category/model/metric selectors, legend + P(≥1), suppressed historical overlay, replay timeline, evaluation, status; demo / actual / provisional / replay labelling; mobile layout | ✅ built and screenshotted with real data | `web/`, `web/screenshots/real/` |
@@ -117,20 +117,42 @@ deviance (smoothing helps sparse counts). Violent results cover only located inc
 ### 3.6 Neural models (CPU, reduced scale; property, report time)
 
 Same leakage-safe inputs, 2,000 training issue times, ≤ 8 epochs, test every 3rd hour
-(3,519 issue times at 6 h), seasonal and LightGBM re-scored on the identical windows:
+(3,519 issue times at 6 h, 3,513 at 24 h), seasonal and LightGBM re-scored on the identical windows:
 
-<!-- DEEP_TABLE -->
+| h | model | capture@10 % | Δ vs seasonal [90 % CI] | Poisson deviance | NB NLL | Brier | pred/obs |
+|---|---|---|---|---|---|---|---|
+| 6 | seasonal | 52.1 % | – | 0.14704 | 0.09525 | 0.02003 | 1.038 |
+| 6 | LightGBM | 52.3 % | +0.18 pp [+0.06, +0.32] | **0.14649** | 0.09494 | 0.02003 | 1.057 |
+| 6 | LightGBM (offset) | 52.3 % | +0.21 pp [+0.09, +0.35] | 0.14668 | 0.09504 | 0.02004 | 1.095 |
+| 6 | TCN | 52.2 % | +0.05 pp [-0.07, +0.15] | 0.14696 | 0.09516 | 0.02005 | 1.020 |
+| 6 | ConvLSTM | 52.1 % | -0.06 pp [-0.12, +0.01] | 0.14679 | 0.09511 | 0.02003 | 1.026 |
+| 6 | ST-GNN | 52.2 % | +0.10 pp [+0.04, +0.19] | 0.14679 | 0.09508 | 0.02004 | 0.979 |
+| 6 | Event transformer | 52.1 % | +0.01 pp [-0.05, +0.08] | 0.14677 | 0.09509 | 0.02003 | 1.022 |
+| 6 | Neural Hawkes | 52.2 % | +0.09 pp [-0.01, +0.21] | 0.14673 | 0.09504 | 0.02004 | 1.011 |
+| 24 | seasonal | 52.0 % | – | 0.37630 | 0.26928 | 0.06146 | 1.037 |
+| 24 | LightGBM | 52.2 % | +0.25 pp [+0.13, +0.36] | 0.37463 | 0.26832 | 0.06141 | 1.070 |
+| 24 | LightGBM (offset) | 52.2 % | +0.24 pp [+0.12, +0.35] | 0.37547 | 0.26869 | 0.06146 | 1.099 |
+| 24 | TCN | 52.1 % | +0.17 pp [+0.07, +0.28] | 0.37428 | 0.26829 | 0.06131 | 1.035 |
+| 24 | ConvLSTM | 52.1 % | +0.12 pp [+0.02, +0.22] | 0.37515 | 0.26859 | 0.06140 | 1.060 |
+| 24 | ST-GNN | 52.2 % | +0.25 pp [+0.13, +0.36] | 0.37474 | 0.26840 | 0.06137 | 1.078 |
+| 24 | Event transformer | 52.2 % | +0.27 pp [+0.14, +0.36] | 0.37524 | 0.26871 | 0.06142 | 1.110 |
+| 24 | Neural Hawkes | 52.2 % | +0.24 pp [+0.13, +0.36] | **0.37416** | 0.26817 | 0.06133 | 1.036 |
 
-No neural architecture beat LightGBM at this scale. Their residual-over-seasonal design
-keeps them better calibrated (pred/obs 0.98–1.03 vs 1.06 for LightGBM). These are
-reduced-scale CPU runs; the GPU configuration is in `configs/gpu/deep_property.yaml`.
+At 6 h no neural model matched LightGBM (capture −0.06 to +0.10 pp vs LightGBM's
++0.18 pp). At 24 h the neural Hawkes process and the TCN were marginally better than
+LightGBM on deviance, log-likelihood, Brier score and calibration (deviance 0.37416 and
+0.37428 vs 0.37463, i.e. ≈0.1 %), while capture gains of the stronger architectures
+(+0.17 to +0.27 pp) are statistically indistinguishable from LightGBM's +0.25 pp. These
+are reduced-scale CPU runs (test windows every 3rd hour, so absolute numbers differ
+slightly from §3.1); the full GPU configuration is in `configs/gpu/deep_property.yaml`.
 
 
 ## 4. Prospective forecasting status
 
-* Live forecasts are frozen for all three categories × {seasonal, hotspot, LightGBM}
-  production models (trained on windows ending 30 days before the snapshot) — e.g.
-  `fc_20261014T2200Z_lgbm_property`, frozen 21:34 UTC for windows from 22:00 UTC.
+* 21 live forecasts are frozen (three issuance rounds in this session: one manual run and two full hourly cycles; all three
+  categories × {seasonal, hotspot, LightGBM} production models trained on windows ending
+  30 days before the snapshot), e.g. `fc_20261014T2200Z_lgbm_property`, frozen at 21:34 UTC
+  for windows starting 22:00 UTC.
 * **No live forecast has been scored yet, and none can be within this session:** SPD
   publishes finalized reports once a day with multi-day delay, so the first
   *provisional* live scores appear after the next publisher refresh, and *mature*

@@ -391,6 +391,59 @@ Provisional window (reports still arriving; not comparable to mature numbers):
 | UNKNOWN | 0 | – | – | 0.00150 |
 | West | 22260 | 0.992 | 44.1% | 0.23504 |
 
+## property · event time = report · run `deep_cpu_h24`
+
+Run `20261014T231805Z`; train issue times from 2019-07-01 (n=2000), validation from 2025-01-01, **test 2025-07-01 → 2026-09-14** (mature), provisional 2026-09-14 → 2026-10-14T18:00; 924 cells; crime availability lag 72 h; test stride 3 h; data versions 20261014T185811Z.
+
+| h | model | capture@5% | capture@10% [90% CI] | capture@20% | PAI@10 | Δcap@10 vs seasonal [90% CI] | hit@top-25 cells | Poisson dev. | NB NLL | Brier | ECE | pred/obs |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 24 | seasonal | 35.8% | 52.0% [51.6, 52.5] | 68.2% | 5.20 | – | 23.8% | 0.37630 | 0.26928 | 0.06146 | 0.00527 | 1.037 |
+| 24 | lgbm | 36.3% | 52.2% [51.8, 52.7] | 68.3% | 5.22 | +0.25 pp [+0.13, +0.36] | 23.8% | 0.37463 | 0.26832 | 0.06141 | 0.00571 | 1.070 |
+| 24 | lgbm_resid | 36.2% | 52.2% [51.7, 52.8] | 68.2% | 5.22 | +0.24 pp [+0.12, +0.35] | 23.9% | 0.37547 | 0.26869 | 0.06146 | 0.00775 | 1.099 |
+| 24 | tcn | 36.0% | 52.1% [51.7, 52.7] | 68.3% | 5.21 | +0.17 pp [+0.07, +0.28] | 24.0% | 0.37428 | 0.26829 | 0.06131 | 0.00404 | 1.035 |
+| 24 | convlstm | 35.9% | 52.1% [51.6, 52.6] | 68.3% | 5.21 | +0.12 pp [+0.02, +0.22] | 24.1% | 0.37515 | 0.26859 | 0.06140 | 0.00520 | 1.060 |
+| 24 | stgnn | 36.2% | 52.2% [51.8, 52.8] | 68.3% | 5.22 | +0.25 pp [+0.13, +0.36] | 23.9% | 0.37474 | 0.26840 | 0.06137 | 0.00594 | 1.078 |
+| 24 | transformer | 36.2% | **52.2% [51.8, 52.8]** | 68.3% | 5.22 | +0.27 pp [+0.14, +0.36] | 24.0% | 0.37524 | 0.26871 | 0.06142 | 0.00912 | 1.110 |
+| 24 | hawkes | 36.1% | 52.2% [51.8, 52.7] | 68.2% | 5.22 | +0.24 pp [+0.13, +0.36] | 24.0% | **0.37416** | 0.26817 | 0.06133 | 0.00360 | 1.036 |
+
+Provisional window (reports still arriving; not comparable to mature numbers):
+
+| h | model | capture@10% | Poisson dev. | observed |
+|---|---|---|---|---|
+| 24 | convlstm | 56.1% | 0.39167 | 24688 |
+| 24 | hawkes | 56.0% | 0.39148 | 24688 |
+| 24 | lgbm | 55.6% | 0.39022 | 24688 |
+| 24 | lgbm_resid | 55.7% | 0.39213 | 24688 |
+| 24 | seasonal | 56.1% | 0.39453 | 24688 |
+| 24 | stgnn | 55.9% | 0.39185 | 24688 |
+| 24 | tcn | 55.8% | 0.39171 | 24688 |
+| 24 | transformer | 55.8% | 0.39322 | 24688 |
+
+### Windows overlapping major events (sports / ≥10k permits)
+
+| h | model | issue times | capture@10% | Poisson dev. | pred/obs |
+|---|---|---|---|---|---|
+| 24 | convlstm | 2160 | 52.1% | 0.37278 | 1.072 |
+| 24 | hawkes | 2160 | 52.3% | 0.37186 | 1.044 |
+| 24 | lgbm | 2160 | 52.4% | 0.37212 | 1.073 |
+| 24 | lgbm_resid | 2160 | 52.3% | 0.37343 | 1.102 |
+| 24 | seasonal | 2160 | 52.0% | 0.37391 | 1.042 |
+| 24 | stgnn | 2160 | 52.3% | 0.37225 | 1.074 |
+| 24 | tcn | 2160 | 52.2% | 0.37204 | 1.027 |
+| 24 | transformer | 2160 | 52.3% | 0.37262 | 1.118 |
+
+### Geographic stability (h = 24, LightGBM)
+
+| precinct | observed (summed over overlapping windows) | pred/obs | capture@10% within precinct | deviance |
+|---|---|---|---|---|
+| East | 58989 | 1.055 | 43.4% | 0.56071 |
+| North | 111021 | 1.084 | 44.0% | 0.38351 |
+| OOJ | 80 | 1.384 | 30.0% | 0.03132 |
+| South | 39039 | 1.130 | 40.5% | 0.30065 |
+| Southwest | 29562 | 1.109 | 46.5% | 0.24040 |
+| UNKNOWN | 0 | – | – | 0.00791 |
+| West | 88957 | 1.023 | 44.9% | 0.55134 |
+
 ## Rolling-origin backtest · property (rolling_origin_expanding)
 
 Origins 2025-07-01, 2025-10-01, 2026-01-01, 2026-04-01, 2026-07-01; each fold retrains on all data available at its origin and is tested on the next 91 days.

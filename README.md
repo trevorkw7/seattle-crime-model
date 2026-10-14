@@ -47,9 +47,10 @@ identical for all models). Full tables: [reports/backtest_results.md](reports/ba
   deviance by 4–6 %; all located offenses behave like property (+0.2–0.3 pp).
   An occurrence-time property target (24 h) shows the same pattern (+0.26 pp,
   −1.6 % deviance).
-* **Neural models (CPU, reduced scale) do not beat LightGBM.** TCN, ConvLSTM, ST-GNN,
-  an event-sequence transformer and a neural Hawkes process land between the seasonal
-  baseline and LightGBM on capture and deviance, but are better calibrated.
+* **Neural models (CPU, reduced scale) are on par with LightGBM at best.** At 6 h none
+  of TCN, ConvLSTM, ST-GNN, the event-sequence transformer or the neural Hawkes process
+  matched LightGBM; at 24 h the neural Hawkes process and TCN were ≈0.1 % better on
+  deviance and better calibrated, with capture gains indistinguishable from LightGBM's.
 
 ## What is in the repository
 
