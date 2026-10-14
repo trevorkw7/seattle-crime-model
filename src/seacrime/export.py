@@ -254,13 +254,29 @@ class Exporter:
     def evaluation(self, backtests: dict) -> dict:
         rows, cal, abl, prec, monthly, lag = [], [], [], [], [], []
         test_window = None
+        deep_rows = []
         for rep in backtests.values():
             cat = rep["category"]
             et = rep["event_time"]
             sp = rep["split"]
-            test_window = test_window or {"start": sp["test_start"], "end": sp["test_end"]}
+            tag = rep.get("tag", "")
+            if tag.startswith("fold") or tag == "deep_smoke":
+                continue  # rolling folds are summarised separately; smoke runs are not results
+            if not tag:
+                test_window = test_window or {"start": sp["test_start"], "end": sp["test_end"]}
             for h, hr in rep["horizons"].items():
                 for m, r in hr["models"].items():
+                    if tag.startswith("deep"):
+                        deep_rows.append({"model_id": m, "category": cat, "event_time": et, "horizon_h": int(h), "test_stride_h": rep.get("test_stride_h"),
+                                          "n_train_issue_times": rep.get("n_train_issue_times"), "capture_10": _r(r["capture_10"]),
+                                          "capture_10_ci": [_r(x) for x in r.get("ci90", {}).get("capture_10", [None, None])],
+                                          "poisson_deviance": _r(r["poisson_deviance"], 5), "brier": _r(r["brier"], 6),
+                                          "calibration_in_large": _r(r["calibration_in_large"], 4),
+                                          "delta_capture_10_vs_seasonal": r.get("delta_capture_10_vs_seasonal"),
+                                          "params": {k: v for k, v in (r.get("params") or {}).items()}})
+                        continue
+                    if tag == "ablation" or (tag and m in ("seasonal", "hotspot")):
+                        continue  # ablation-run reference models / re-scored baselines duplicate the main run
                     rows.append({
                         "model_id": m, "category": cat, "event_time": et, "horizon_h": int(h),
                         "capture_5": _r(r["capture_5"]), "capture_10": _r(r["capture_10"]), "capture_20": _r(r["capture_20"]),
@@ -293,6 +309,18 @@ class Exporter:
                                  "observed_total": r["observed_total"], "n_issue_times": r["n_issue_times"]})
             if rep.get("lag_sensitivity"):
                 lag.append({"category": cat, "event_time": et, "results": rep["lag_sensitivity"]})
+        rolling = []
+        for d in sorted((self.cfg.artifacts_root / "backtests").glob("*_rolling")):
+            rp = d / "report.json"
+            if rp.exists():
+                rr = json.loads(rp.read_text())
+                rolling.append({"category": rr["category"], "event_time": rr["event_time"], "origins": rr["origins"], "fold_days": rr["fold_days"],
+                                "pooled": [{"horizon_h": int(h), "model_id": m, "capture_10": _r(r["capture_10"]),
+                                            "capture_10_ci": [_r(x) for x in r.get("ci90", {}).get("capture_10", [None, None])],
+                                            "poisson_deviance": _r(r["poisson_deviance"], 5), "calibration_in_large": _r(r["calibration_in_large"], 4),
+                                            "delta_capture_10_vs_seasonal": r.get("delta_capture_10_vs_seasonal")}
+                                           for h, pr in rr["pooled"].items() for m, r in pr.items()],
+                                "folds": rr["folds"]})
         backtest_rows = [r for r in rows if r.get("section") != "backtest_provisional"]
         prov_rows = [r for r in rows if r.get("section") == "backtest_provisional"]
         prospective = self._prospective_rows()
@@ -304,6 +332,8 @@ class Exporter:
             "calibration": cal,
             "stability": {"by_precinct": prec, "by_month": monthly},
             "lag_sensitivity": lag,
+            "rolling": rolling,
+            "deep_comparison": deep_rows,
         }
 
     def _prospective_rows(self) -> dict:
