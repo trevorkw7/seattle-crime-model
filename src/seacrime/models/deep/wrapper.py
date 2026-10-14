@@ -58,12 +58,18 @@ class DeepGridModel(CountModel):
 
     # ------------------------------------------------------------ plumbing
     def __getstate__(self):
-        d = dict(self.__dict__)
+        # Persist only configuration, normalisation stats and weights. Everything
+        # set by attach() (feature builder, prefix-sum/count arrays, geometry) is
+        # runtime state and can be gigabytes; it is re-created by attach().
+        d = {k: v for k, v in self.__dict__.items() if not k.startswith("_")}
         if self._net is not None:
             d["state"] = {k: v.detach().cpu() for k, v in self._net.state_dict().items()}
-        d["_fb"] = None
-        d["_net"] = None
         return d
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+        self._fb = None
+        self._net = None
 
     def attach(self, fb, horizon: int) -> DeepGridModel:
         self._fb = fb

@@ -158,3 +158,23 @@ def test_events_respect_schedule_publication_and_exante_attendance(env, tmp_path
     X_after, _ = fb.build(np.array([8995]), 24)
     assert X_before["ev_major_near_1km"].sum() == 0
     assert X_after["ev_major_near_1km"].sum() == 1
+
+
+def test_deep_model_checkpoint_excludes_runtime_arrays(env):
+    """Saved neural models must contain weights/config only (not cube arrays)."""
+    import pickle
+
+    torch = pytest.importorskip("torch")
+    del torch
+    from seacrime.models.deep.wrapper import DeepGridModel
+
+    grid, active, prop, *_ = env
+    fb = _builder(env, prop)
+    t = np.arange(24 * 7 * 54, 24 * 7 * 54 + 40, 3)
+    X, y = fb.build(t, 6)
+    m = DeepGridModel(arch="tcn", epochs=1, samples_per_epoch=8, batch_size=4, hist_days=7).attach(fb, 6)
+    m.fit(X, y, X, y)
+    blob = pickle.dumps(m)
+    assert len(blob) < 2_000_000
+    m2 = pickle.loads(blob).attach(fb, 6)
+    np.testing.assert_allclose(m2.predict_mu(X), m.predict_mu(X), rtol=1e-5)
