@@ -1,0 +1,46 @@
+# Seattle crime forecasting research platform — default configuration.
+# All paths are relative to the repository root unless absolute.
+
+data_root: data
+artifacts_root: artifacts
+timezone: America/Los_Angeles
+
+grid:
+  cell_size_m: 500            # configurable spatial resolution
+  crs: EPSG:32610             # UTM zone 10N (metres)
+  # Seattle city-limits bounding box (lon/lat). Cells are kept only if they
+  # intersect the city boundary (when available) or contain historical incidents.
+  bbox: [-122.4400, 47.4950, -122.2350, 47.7350]
+
+forecast:
+  horizons_h: [1, 3, 6, 24]
+  issue_every_h: 1
+  # Primary event timestamp used for the target. "report" = report_date_time
+  # (precise, what is publicly *reported*); "offense" = offense start time.
+  event_time: report
+
+# SPD only publishes finalized (UCR-approved) reports, once per day. A forecast
+# issued at time t may only use incidents whose report time is older than this
+# lag (estimated from the measured publication-completeness curve). The lag is
+# deliberately conservative; see reports/data_validation.md.
+availability:
+  crime_feature_lag_h: 72
+  calls_feature_lag_h: 96     # SPD CAD call data publishes with ~3-4 day delay
+  fire911_feature_lag_h: 1    # SFD real-time feed updates every 5 minutes
+  maturity_days: 30           # windows younger than this are scored as provisional
+
+categories:
+  # Primary target: SPD's own "PROPERTY CRIME" grouping (burglary, larceny-theft,
+  # motor-vehicle theft, arson, robbery is violent in SPD's grouping).
+  property:
+    offense_category: ["PROPERTY CRIME"]
+  violent:
+    offense_category: ["VIOLENT CRIME"]
+  all_located:
+    offense_category: null    # every located offense
+
+training:
+  start: "2019-06-01"         # SPD replaced its RMS in May 2019
+  val_start: "2025-01-01"
+  test_start: "2025-07-01"
+  test_end: null              # null => latest mature data
