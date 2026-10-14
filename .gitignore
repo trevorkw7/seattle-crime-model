@@ -22,3 +22,5 @@ web/out/
 !.env.example
 *.pem
 *.key
+catboost_info/
+logs/
