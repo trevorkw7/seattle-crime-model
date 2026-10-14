@@ -294,8 +294,13 @@ class Exporter:
                     cal.append({"model_id": m, "category": cat, "event_time": et, "horizon_h": int(h), "bins": r.get("_bins", [])})
                     if m in ("lgbm", "seasonal", "hotspot"):
                         prec.append({"model_id": m, "category": cat, "event_time": et, "horizon_h": int(h),
-                                     "by_precinct": [{"precinct": p, **{k: _r(v, 4) for k, v in d.items()}} for p, d in r.get("_precinct", {}).items()]})
-                        monthly.append({"model_id": m, "category": cat, "event_time": et, "horizon_h": int(h), "by_month": r.get("_monthly", [])})
+                                     "by_precinct": [{"precinct": p, "capture_10": _r(d["capture_10_within"], 4), **{k: _r(v, 4) for k, v in d.items()}}
+                                                     for p, d in r.get("_precinct", {}).items() if d.get("obs", 0) >= 50]})
+                        mon = r.get("_monthly", [])
+                        med = float(np.median([x["observed_total"] for x in mon])) if mon else 0.0
+                        # drop partial edge months (UTC/local boundary) with < 25 % of a typical month's incidents
+                        monthly.append({"model_id": m, "category": cat, "event_time": et, "horizon_h": int(h),
+                                        "by_month": [x for x in mon if x["observed_total"] >= 0.25 * med]})
                 for a, ar in hr.get("ablations", {}).items():
                     abl.append({"name": a, "model_id": "lgbm", "category": cat, "event_time": et, "horizon_h": int(h),
                                 "capture_10": _r(ar["capture_10"]), "poisson_deviance": _r(ar["poisson_deviance"], 5), "brier": _r(ar["brier"], 6),

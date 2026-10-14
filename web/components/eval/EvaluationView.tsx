@@ -701,9 +701,10 @@ function ProspectiveSection({
   const hasReplay = replayRows.length > 0 || ts.some((r) => sourceOf(r) === 'replay');
   const anyLive = (s.prospective?.rows ?? []).some((r) => sourceOf(r) === 'live') || (s.prospective?.timeseries ?? []).some((r) => sourceOf(r) === 'live');
 
-  const times = ts.map((p) => new Date(p.issued_at).getTime());
-  const t0 = Math.min(...times);
-  const t1 = Math.max(...times);
+  const times = ts.map((p) => new Date(p.issued_at).getTime()).filter((v) => Number.isFinite(v));
+  // No scored forecasts yet (e.g. right after launch): keep the axis finite.
+  const t0 = times.length ? Math.min(...times) : Date.now();
+  const t1 = times.length ? Math.max(...times) : t0;
   const provTimes = ts.filter((p) => p.maturity === 'provisional').map((p) => new Date(p.issued_at).getTime());
   const liveStart = liveTs.length ? Math.min(...liveTs.map((p) => new Date(p.issued_at).getTime())) : null;
   const span = t1 - t0 || 86400e3;
@@ -741,7 +742,9 @@ function ProspectiveSection({
   });
 
   const tickCount = 6;
-  const xTicks = Array.from({ length: tickCount }, (_, i) => t0 + (span * i) / (tickCount - 1)).map((v) => ({ value: v, label: fmtShortDate(v) }));
+  const xTicks = times.length
+    ? Array.from({ length: tickCount }, (_, i) => t0 + (span * i) / (tickCount - 1)).map((v) => ({ value: v, label: fmtShortDate(v) }))
+    : [];
 
   return (
     <section className="eval-section" aria-labelledby="pr-h">
