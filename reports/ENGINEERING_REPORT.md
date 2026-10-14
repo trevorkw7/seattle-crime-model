@@ -27,7 +27,7 @@ tables, [runs/](runs/) for the raw run reports, and
 
 ## 2. What was tested
 
-* `pytest`: 63 tests pass (unit, leakage, chronology, DST, metrics, NB
+* `pytest`: 64 tests pass (unit, leakage, chronology, DST, metrics, NB
   dispersion/intervals, model fitting, reconciliation, frozen-store tamper detection,
   maturity labelling, weather-forecast availability, event schedule/attendance
   leakage, API, context-ingestion parsers, and an end-to-end synthetic lifecycle:
@@ -40,7 +40,9 @@ tables, [runs/](runs/) for the raw run reports, and
 * Bugs found and fixed by these checks: a forecast-metadata/horizon mismatch
   (end-to-end test), post-event sports attendance used as a feature (review of the
   events table), GLM transform decided per batch, memory blow-up (OOM) in the GLM
-  design matrix, and a dashboard crash with zero scored prospective forecasts.
+  design matrix, a dashboard crash with zero scored prospective forecasts, and
+  neural-model checkpoints that serialized cached cube arrays (3.6 GB each, filled
+  the disk mid-experiment; now weights/config only, < 2 MB, with a regression test).
 
 ## 3. Measured accuracy relative to baselines
 
@@ -95,7 +97,34 @@ no permits (sports schedules are complete).
 Fresher data would add ≈0.2 pp of capture at most; near-repeat information is weak at
 500 m / 24 h for reported property crime.
 
-<!-- DEEP_AND_CATEGORIES -->
+### 3.5 Other categories and targets (same protocol, LightGBM vs baselines)
+
+| target | h | seasonal cap@10 | hotspot Δ | LightGBM Δ [90% CI] | deviance: LightGBM vs seasonal | LightGBM pred/obs |
+|---|---|---|---|---|---|---|
+| violent (located) | 6 | 64.2 % | −0.41 pp [−0.98, +0.15] | **+0.77 pp [+0.23, +1.26]** | 0.02420 vs 0.02519 (−3.9 %) | 1.085 |
+| violent (located) | 24 | 64.2 % | −0.50 pp [−0.94, −0.05] | **+0.74 pp [+0.31, +1.15]** | 0.06955 vs 0.07367 (−5.6 %) | 1.066 |
+| all located offenses | 1 | 53.7 % | −0.04 pp | +0.25 pp [+0.15, +0.36] | 0.05663 vs 0.05670 (−0.1 %) | 1.044 |
+| all located offenses | 6 | 53.7 % | −0.07 pp | +0.29 pp [+0.22, +0.38] | 0.20553 vs 0.20620 (−0.3 %) | 1.080 |
+| all located offenses | 24 | 53.6 % | −0.00 pp | +0.21 pp [+0.15, +0.29] | 0.47912 vs 0.48039 (−0.3 %) | 1.084 |
+| property, **occurrence time** | 24 | 52.1 % | −0.43 pp [−0.58, −0.25] | +0.26 pp [+0.12, +0.40] | 0.36755 vs 0.37366 (−1.6 %) | 1.034 |
+| property, LightGBM with seasonal log-offset | 24 | 52.0 % | – | +0.24 pp [+0.13, +0.35] | 0.37591 vs 0.37625 (−0.1 %) | 1.116 |
+
+Violent incidents are sparser and more concentrated; there the learned model's gain is
+about three times larger and the KDE hotspot beats the per-cell seasonal baseline on
+deviance (smoothing helps sparse counts). Violent results cover only located incidents
+(≈27 % of violent offenses are redacted or unlocated).
+
+### 3.6 Neural models (CPU, reduced scale; property, report time)
+
+Same leakage-safe inputs, 2,000 training issue times, ≤ 8 epochs, test every 3rd hour
+(3,519 issue times at 6 h), seasonal and LightGBM re-scored on the identical windows:
+
+<!-- DEEP_TABLE -->
+
+No neural architecture beat LightGBM at this scale. Their residual-over-seasonal design
+keeps them better calibrated (pred/obs 0.98–1.03 vs 1.06 for LightGBM). These are
+reduced-scale CPU runs; the GPU configuration is in `configs/gpu/deep_property.yaml`.
+
 
 ## 4. Prospective forecasting status
 
