@@ -14,6 +14,32 @@ and an interactive map.
 **Engineering report:** [reports/ENGINEERING_REPORT.md](reports/ENGINEERING_REPORT.md) ·
 **Data validation:** [reports/data_validation.md](reports/data_validation.md)
 
+## Key findings so far (executed experiments)
+
+Primary target: SPD property-crime reports per 500 m cell, test period
+2025-07-01 → 2026-09-14 (≈10,500 hourly issue times per horizon × 924 cells,
+identical for all models). Full tables: [reports/backtest_results.md](reports/backtest_results.md).
+
+* **Strong concentration, strong baseline.** The top 10 % of cells receive ≈52 % of
+  reports (PAI ≈ 5.2). The empirical-Bayes hour-of-week **seasonal baseline** reaches
+  capture@10 % = 52.0–52.1 % at every horizon; the KDE hotspot map is slightly worse
+  (−0.04 to −0.29 pp).
+* **Learned models add little.** Best learned model vs seasonal (paired day-block
+  bootstrap, 90 % CI): h=1 Poisson GLM +0.24 pp [+0.08, +0.40]; h=3 Poisson GLM
+  +0.25 pp [+0.10, +0.39]; h=6 LightGBM +0.24 pp [+0.13, +0.35]; h=24 NB GLM
+  +0.33 pp [+0.20, +0.47]. Poisson deviance improves by ≤0.9 % (h=24 Poisson GLM).
+* **Calibration drift dominates error.** All models over-predict in the test period
+  (pred/obs 1.04 seasonal, ≈1.09 for the gradient-boosted models at 6–24 h), most in
+  the South/Southwest precincts — reported property crime declined relative to the
+  training years.
+* **Context barely helps.** Removing weather, events, transit, CAD calls, Fire/EMS,
+  static geography or other crime categories changes LightGBM capture@10 % by
+  ≤0.08 pp (all 90 % CIs include 0); removing all context costs ≈0.3 % deviance at
+  6 h. Event windows show no specific gain.
+* **Data timeliness matters little at this resolution.** Re-training with
+  hypothetical instant crime publication (lag 0 h vs 72 h) raises 24 h capture@10 %
+  by ≈0.17 pp.
+
 ## What is in the repository
 
 | Path | Contents |
