@@ -141,3 +141,13 @@ def test_poisson_glm_fits():
     m = PoissonGLM().fit(X.iloc[:20_000], y[:20_000], X.iloc[20_000:], y[20_000:])
     pred = m.predict_mu(X.iloc[20_000:])
     assert abs(pred.sum() / y[20_000:].sum() - 1) < 0.1
+
+
+def test_lgbm_with_seasonal_offset_starts_from_baseline():
+    from seacrime.models.gbm import LGBMModel
+
+    X, y, mu = _synthetic()
+    m = LGBMModel(model_id="lgbm_resid", offset_col="base_seasonal", num_boost_round=200, early_stopping=20)
+    m.fit(X.iloc[:40_000], y[:40_000], X.iloc[40_000:50_000], y[40_000:50_000])
+    pred = m.predict_mu(X.iloc[50_000:])
+    assert np.corrcoef(np.log(pred), np.log(mu[50_000:]))[0, 1] > 0.8

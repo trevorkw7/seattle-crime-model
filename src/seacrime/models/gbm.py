@@ -36,22 +36,32 @@ class LGBMModel(CountModel):
     num_boost_round: int = 2000
     early_stopping: int = 100
     exclude: tuple[str, ...] = ()
+    # if set, boost from log(offset_col) (multiplicative corrections to a baseline)
+    offset_col: str | None = None
+
+    def _offset(self, X: pd.DataFrame) -> np.ndarray | None:
+        if not self.offset_col:
+            return None
+        return np.log(np.maximum(X[self.offset_col].to_numpy(dtype=float), 1e-6))
 
     def _fit(self, X, y, X_val, y_val) -> None:
         import lightgbm as lgb
 
         self.features = [c for c in feature_columns(X) if c not in self.exclude] + ["base_seasonal", "base_hotspot"]
-        dtr = lgb.Dataset(X[self.features], label=y, free_raw_data=True)
+        dtr = lgb.Dataset(X[self.features], label=y, init_score=self._offset(X), free_raw_data=True)
         valid = []
         callbacks = []
         if X_val is not None:
-            valid = [lgb.Dataset(X_val[self.features], label=y_val, reference=dtr)]
+            valid = [lgb.Dataset(X_val[self.features], label=y_val, init_score=self._offset(X_val), reference=dtr)]
             callbacks = [lgb.early_stopping(self.early_stopping, verbose=False), lgb.log_evaluation(0)]
         self.booster = lgb.train(self.lgb_params, dtr, num_boost_round=self.num_boost_round, valid_sets=valid, callbacks=callbacks)
         self.params = {**self.lgb_params, "best_iteration": int(self.booster.best_iteration or self.num_boost_round)}
 
     def predict_mu(self, X: pd.DataFrame) -> np.ndarray:
         it = self.booster.best_iteration or None
+        if self.offset_col:
+            raw = self.booster.predict(X[self.features], num_iteration=it, raw_score=True)
+            return np.maximum(np.exp(raw + self._offset(X)), 1e-6)
         return np.maximum(self.booster.predict(X[self.features], num_iteration=it), 1e-6)
 
     def feature_importance(self) -> pd.Series:

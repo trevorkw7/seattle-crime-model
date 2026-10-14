@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from seacrime.config import load_config  # noqa: E402
 
-ORDER = ["hotspot", "seasonal", "poisson_glm", "negbin_glm", "lgbm", "catboost", "tcn", "convlstm", "stgnn", "transformer", "hawkes"]
+ORDER = ["hotspot", "seasonal", "poisson_glm", "negbin_glm", "lgbm", "lgbm_resid", "catboost", "tcn", "convlstm", "stgnn", "transformer", "hawkes"]
 
 
 def pct(x, d=1):

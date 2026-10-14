@@ -28,6 +28,7 @@ TZ = "America/Los_Angeles"
 CATEGORY_LABELS = {"property": "Property crime", "violent": "Violent crime (located)", "all_located": "All located offenses"}
 MODEL_LABELS = {
     "lgbm": "LightGBM",
+    "lgbm_resid": "LightGBM (seasonal offset)",
     "catboost": "CatBoost",
     "seasonal": "Seasonal (hour-of-week)",
     "hotspot": "Hotspot (KDE)",
@@ -386,7 +387,7 @@ def _family(m: str) -> str:
         return "baseline"
     if m in ("poisson_glm", "negbin_glm"):
         return "glm"
-    if m in ("lgbm", "catboost"):
+    if m in ("lgbm", "lgbm_resid", "catboost"):
         return "gbm"
     return "deep"
 

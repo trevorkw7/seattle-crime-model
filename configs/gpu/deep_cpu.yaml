@@ -6,7 +6,7 @@ category: property
 event_time: report
 horizons: [6, 24]
 archs: [tcn, convlstm, stgnn, transformer, hawkes]
-compare_with: [seasonal, lgbm]
+compare_with: [seasonal, lgbm, lgbm_resid]
 device: cpu
 n_train_issue_times: 2000
 n_val_issue_times: 400

@@ -173,6 +173,10 @@ def make_model(name: str, **kw) -> CountModel:
         from ..models.gbm import LGBMModel
 
         return LGBMModel(**kw)
+    if name == "lgbm_resid":
+        from ..models.gbm import LGBMModel
+
+        return LGBMModel(model_id="lgbm_resid", offset_col="base_seasonal", **kw)
     if name == "catboost":
         from ..models.gbm import CatBoostModel
 
