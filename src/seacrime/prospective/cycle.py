@@ -108,6 +108,13 @@ def run_cycle(cfg: Config, ingest: bool = True, categories: list[str] | None = N
             return _incremental(cfg, "spd_calls", SPD_CALLS, "cad_event_original_time_queued", "spd_calls.parquet", "ts_utc", 14, process_spd_calls)
 
         step("ingest_spd_calls", calls)
+
+        def weather():
+            from ..ingest.weather import refresh_mos_recent
+
+            return {"new_mos_rows": refresh_mos_recent(cfg)}
+
+        step("ingest_weather_mos", weather)
     step("build_cubes", lambda: {"active_cells": build_all(cfg, extend_to=pd.Timestamp.now("UTC") + pd.Timedelta(hours=27))["active_cells"]})
     step("hourly_forecast", lambda: {"frozen": issue_forecasts(cfg, categories)})
     step("score", lambda: {"scored_windows": score_all(cfg)})

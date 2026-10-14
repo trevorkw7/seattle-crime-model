@@ -282,12 +282,13 @@ def run_backtest(
     with_context: bool = True,
     deep_kw: dict | None = None,
     tag: str = "",
+    split_override: Split | None = None,
 ) -> dict:
     t0 = time.time()
     deep_kw = deep_kw or {}
     env = load_env(cfg, category, event_time, with_context=with_context)
     data_end = pd.Timestamp(env.target.meta.get("data_end", env.target.meta["end"]))
-    split = default_split(cfg, data_end)
+    split = split_override or default_split(cfg, data_end)
     lag = cfg["availability"]["crime_feature_lag_h"]
     base_fcfg = FeatureConfig(crime_lag_h=lag, calls_lag_h=cfg["availability"]["calls_feature_lag_h"], fire_lag_h=cfg["availability"]["fire911_feature_lag_h"])
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -406,6 +407,64 @@ def run_backtest(
     return report
 
 
+def run_rolling(
+    cfg: Config,
+    category: str,
+    horizons: list[int],
+    models: list[str],
+    out_root: Path,
+    origins: list[str],
+    fold_days: int = 91,
+    val_days: int = 120,
+    n_train: int = 2000,
+    n_val: int = 500,
+    event_time: str = "report",
+) -> dict:
+    """Rolling-origin (expanding window) backtest: at each origin the models are
+    re-trained on everything available then and tested on the next fold."""
+    env_end = pd.Timestamp(load_env(cfg, category, event_time, with_context=False).target.meta.get("data_end"))
+    base = default_split(cfg, env_end)
+    folds = []
+    for o in origins:
+        t0 = pd.Timestamp(o, tz="UTC")
+        te = min(t0 + pd.Timedelta(days=fold_days), base.test_end)
+        if te <= t0:
+            continue
+        sp = Split(train_start=base.train_start, val_start=t0 - pd.Timedelta(days=val_days), test_start=t0, test_end=te, data_end=base.data_end)
+        rep = run_backtest(cfg, category, horizons, models, out_root, event_time, n_train, n_val, tag=f"fold{t0.strftime('%Y%m%d')}",
+                           split_override=sp, save_models=False)
+        folds.append(rep)
+    origin = CUBE_ORIGIN
+    out = {"category": category, "event_time": event_time, "protocol": "rolling_origin_expanding", "origins": origins, "fold_days": fold_days,
+           "folds": [{"test_start": f["split"]["test_start"], "test_end": f["split"]["test_end"],
+                      "horizons": {h: {m: {k: r[k] for k in ("capture_10", "poisson_deviance", "brier", "calibration_in_large", "observed_total")}
+                                       for m, r in hr["models"].items()} for h, hr in f["horizons"].items()}} for f in folds],
+           "pooled": {}}
+    for h in horizons:
+        pooled = {}
+        for m in models:
+            parts = []
+            for f in folds:
+                d = out_root / f"{category}_{event_time}_{f['tag']}" / f["run_id"] / "stats" / f"h{h}" / "mature" / f"{m}.parquet"
+                if d.exists():
+                    parts.append(pd.read_parquet(d))
+            if not parts:
+                continue
+            st = pd.concat(parts, ignore_index=True)
+            r = summarize(st, folds[0]["n_active_cells"])
+            r["ci90"] = bootstrap_ci(st, folds[0]["n_active_cells"], origin)
+            pooled[m] = r
+            pooled[f"_stats_{m}"] = st
+        for m in [m for m in models if m in pooled and m != "seasonal"]:
+            if "seasonal" in pooled:
+                pooled[m]["delta_capture_10_vs_seasonal"] = paired_bootstrap_delta(pooled[f"_stats_{m}"], pooled["_stats_seasonal"], folds[0]["n_active_cells"], origin)
+        out["pooled"][str(h)] = {k: v for k, v in pooled.items() if not k.startswith("_")}
+    d = out_root / f"{category}_{event_time}_rolling"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "report.json").write_text(json.dumps(out, indent=2, default=_json_default))
+    return out
+
+
 def run_lag_sensitivity(env: Env, split: Split, base: FeatureConfig, lags: list[int], n_train: int, n_val: int, h: int = 24, stride: int = 6) -> dict:
     """How much would fresher crime data help? Re-train LightGBM with alternative
     crime availability lags (0 = hypothetical instant publication)."""
@@ -465,12 +524,20 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--no-context", action="store_true")
     ap.add_argument("--out", default=None)
     ap.add_argument("--tag", default="")
+    ap.add_argument("--rolling-origins", nargs="*", default=[], help="e.g. 2025-07-01 2025-10-01 2026-01-01 2026-04-01 2026-07-01")
     ap.add_argument("--deep-epochs", type=int, default=12)
     ap.add_argument("--deep-samples", type=int, default=768)
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     cfg = load_config()
     out_root = Path(args.out) if args.out else cfg.artifacts_root / "backtests"
+    if args.rolling_origins:
+        rr = run_rolling(cfg, args.category, args.horizons, args.models, out_root, args.rolling_origins, n_train=args.n_train, n_val=args.n_val,
+                         event_time=args.event_time)
+        for h, pr in rr["pooled"].items():
+            for m, r in pr.items():
+                print(f"rolling h={h:>2} {m:<12} cap10={r['capture_10']:.3f} dev={r['poisson_deviance']:.4f} brier={r['brier']:.5f} cal={r['calibration_in_large']:.3f}")
+        return
     rep = run_backtest(cfg, args.category, args.horizons, args.models, out_root, args.event_time, args.n_train, args.n_val,
                        args.test_stride, args.ablations, args.lag_sensitivity, with_context=not args.no_context,
                        deep_kw={"epochs": args.deep_epochs, "samples_per_epoch": args.deep_samples}, tag=args.tag)

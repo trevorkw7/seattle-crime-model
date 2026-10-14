@@ -31,25 +31,23 @@ def prospective_root(cfg: Config):
 
 
 def live_weather(cfg: Config, wx_obs: pd.DataFrame | None, origin: pd.Timestamp) -> pd.DataFrame | None:
-    """Observed hourly weather up to now + NWS forecast for future hours."""
+    """Observed hourly weather for the live issue time: archived NCEI observations
+    (lag ~40 h) topped up with real-time METAR observations from api.weather.gov.
+    Window weather itself comes from the latest archived MOS run (forecast mode)."""
     try:
-        from ..ingest.weather import fetch_nws_forecast
+        from ..ingest.weather import fetch_nws_observations
 
-        fc = fetch_nws_forecast(cfg)
-    except Exception as e:  # network or API failure -> fall back to observed only
-        log.warning("NWS forecast unavailable: %s", e)
+        ob = fetch_nws_observations(cfg)
+    except Exception as e:  # network or API failure -> archived observations only
+        log.warning("NWS observations unavailable: %s", e)
         return wx_obs
-    if fc is None or len(fc) == 0:
+    if ob is None or ob.empty:
         return wx_obs
-    ts = pd.to_datetime(fc["valid_ts_utc"], utc=True).dt.floor("h")
-    f = pd.DataFrame({"h": ((ts - origin) // pd.Timedelta(hours=1)).astype(np.int64)})
-    for c in ("temp_c", "precip_mm", "wind_ms"):
-        if c in fc:
-            f[c] = pd.to_numeric(fc[c], errors="coerce").to_numpy()
-    f = f.groupby("h").mean()
+    h = ((pd.to_datetime(ob["ts_utc"], utc=True) - origin) // pd.Timedelta(hours=1)).astype(np.int64)
+    f = ob.assign(h=h).set_index("h")[["temp_c", "precip_mm", "wind_ms"]]
     if wx_obs is None:
         return f
-    return pd.concat([wx_obs[wx_obs.index < f.index.min()], f]).sort_index()
+    return pd.concat([wx_obs[~wx_obs.index.isin(f.index)], f]).sort_index()
 
 
 def issue_forecasts(cfg: Config, categories: list[str], models: list[str] | None = None, now: pd.Timestamp | None = None) -> list[str]:

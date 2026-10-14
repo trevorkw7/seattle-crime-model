@@ -50,8 +50,15 @@ def load_weather_forecasts(processed: Path, origin: pd.Timestamp, horizons: list
     if cache.exists() and cache.stat().st_mtime >= p.stat().st_mtime:
         tab = pd.read_parquet(cache)
     else:
+        old_tab = pd.read_parquet(cache) if cache.exists() else None
         f = pd.read_parquet(p)
         f = f[f["source"] == source].copy()
+        if old_tab is not None and len(old_tab):
+            # incremental: recompute only issue hours near the end of the cached table
+            t_from = int(old_tab["t"].max()) - 96
+            iss = ((pd.to_datetime(f["issued_at_utc"], utc=True) - origin) / pd.Timedelta(hours=1)).apply(np.ceil)
+            f = f[iss >= t_from - 24 * 4]
+            old_tab = old_tab[old_tab["t"] < t_from]
         f["iss_h"] = ((pd.to_datetime(f["issued_at_utc"], utc=True) - origin) / pd.Timedelta(hours=1)).apply(np.ceil).astype(np.int64)
         f["val_h"] = ((pd.to_datetime(f["valid_ts_utc"], utc=True) - origin) // pd.Timedelta(hours=1)).astype(np.int64)
         f = f.sort_values(["iss_h", "val_h"])
@@ -86,6 +93,8 @@ def load_weather_forecasts(processed: Path, origin: pd.Timestamp, horizons: list
                         row[c] = np.nan
                 rows.append(row)
         tab = pd.DataFrame(rows)
+        if old_tab is not None and len(old_tab):
+            tab = pd.concat([old_tab, tab[tab["t"] >= t_from]], ignore_index=True)
         tab.to_parquet(cache, index=False)
     return {h: g.drop(columns=["h"]).set_index("t") for h, g in tab.groupby("h") if h in horizons}
 

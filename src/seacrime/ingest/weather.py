@@ -623,9 +623,62 @@ def fetch_nws_forecast(cfg: Config, point: tuple[float, float] = NWS_POINT, stor
     return df
 
 
+def refresh_mos_recent(cfg: Config, days: int = 3, model: str = "GFS") -> int:
+    """Append the most recent MOS runs (live operation) to the forecast archive.
+
+    Only the last ``days`` days are requested, so this is cheap enough to run
+    every hourly cycle. Returns the number of new rows."""
+    sess = session()
+    end = pd.Timestamp(datetime.now(UTC)).floor("h")
+    start = end - pd.Timedelta(days=days)
+    params = {"station": MOS_STATION, "model": model, "sts": start.strftime("%Y-%m-%dT%H:%MZ"),
+              "ets": (end + pd.Timedelta(hours=1)).strftime("%Y-%m-%dT%H:%MZ"), "format": "csv"}
+    snap = RawSnapshot(cfg.raw_dir, "weather_mos_live")
+    r = http_get(sess, IEM_MOS_URL, params, timeout=120, backoff_s=5)
+    df = parse_mos_csv(r.text, model, MOS_MODELS[model][2])
+    snap.save(f"iem_mos_{model}_recent.csv", r.content, IEM_MOS_URL, params, rows=len(df))
+    snap.finish(license="NWS MOS: public domain; archive served by Iowa Environmental Mesonet")
+    path = cfg.processed_dir / "weather_forecast_hourly.parquet"
+    hist = pd.read_parquet(path) if path.exists() else pd.DataFrame()
+    n0 = len(hist)
+    allf = pd.concat([hist, df], ignore_index=True).drop_duplicates(["model", "run_utc", "valid_ts_utc"], keep="first")
+    write_parquet(allf.sort_values(["model", "run_utc", "valid_ts_utc"]), path)
+    return len(allf) - n0
+
+
+def fetch_nws_observations(cfg: Config, station: str = "KSEA", limit: int = 72) -> pd.DataFrame:
+    """Recent real-time METAR observations from api.weather.gov (hourly frame with
+    ts_utc, temp_c, precip_mm, wind_ms). NCEI's archives lag ~40 h, so live
+    'previous 24 h' weather features come from here."""
+    sess = session(NWS_HEADERS)
+    url = f"https://api.weather.gov/stations/{station}/observations"
+    start = (pd.Timestamp(datetime.now(UTC)) - pd.Timedelta(hours=limit)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    r = http_get(sess, url, {"start": start, "limit": 500}, timeout=60)
+    rows = []
+    for f in r.json().get("features", []):
+        pr = f.get("properties", {})
+        rows.append({
+            "ts": pd.Timestamp(pr.get("timestamp")),
+            "temp_c": (pr.get("temperature") or {}).get("value"),
+            "precip_mm": (pr.get("precipitationLastHour") or {}).get("value"),
+            "wind_ms": ((pr.get("windSpeed") or {}).get("value") or np.nan) * KMH_TO_MS if (pr.get("windSpeed") or {}).get("value") is not None else np.nan,
+        })
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    df["ts_utc"] = pd.to_datetime(df["ts"], utc=True).dt.floor("h")
+    for c in ("temp_c", "precip_mm", "wind_ms"):
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    # METAR omits the precipitation group when none fell
+    df["precip_mm"] = df["precip_mm"].fillna(0.0)
+    return df.groupby("ts_utc")[["temp_c", "precip_mm", "wind_ms"]].mean().reset_index()
+
+
 __all__ = [
     "fetch_weather",
     "fetch_nws_forecast",
+    "fetch_nws_observations",
+    "refresh_mos_recent",
     "isd_to_hourly",
     "ghcnh_to_hourly",
     "zero_fill_routine_precip",

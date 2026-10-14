@@ -58,7 +58,7 @@ def main() -> None:
             n_val=job["n_val_issue_times"],
             test_stride=job.get("test_stride_h", 1),
             deep_kw=deep_kw,
-            tag="deep" if job["job"] != "cpu_smoke" else "deep_smoke",
+            tag={"cpu_smoke": "deep_smoke", "deep_cpu": "deep_cpu"}.get(job["job"], "deep"),
         )
         for h, hr in rep["horizons"].items():
             for m, r in hr["models"].items():

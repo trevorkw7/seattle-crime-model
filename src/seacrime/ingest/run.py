@@ -24,7 +24,7 @@ def main(argv: list[str] | None = None) -> None:
     cfg = load_config(args.config)
     names = args.sources
     if names == ["all"]:
-        names = list(SOCRATA_SOURCES) + ["weather", "events", "gtfs", "boundaries"]
+        names = list(SOCRATA_SOURCES) + ["weather", "events", "gtfs", "boundaries", "news"]
     for name in names:
         if name in SOCRATA_SOURCES:
             p = snapshot(name, SOCRATA_SOURCES[name], cfg.raw_dir, max_rows=args.max_rows)
@@ -45,6 +45,10 @@ def main(argv: list[str] | None = None) -> None:
             from .boundaries import fetch_boundaries
 
             fetch_boundaries(cfg)
+        elif name == "news":
+            from .news import fetch_news
+
+            fetch_news(cfg)
         else:
             raise SystemExit(f"unknown source {name}")
 
