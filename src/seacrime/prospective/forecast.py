@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import asdict
 from datetime import UTC, datetime
 
@@ -34,6 +35,8 @@ def live_weather(cfg: Config, wx_obs: pd.DataFrame | None, origin: pd.Timestamp)
     """Observed hourly weather for the live issue time: archived NCEI observations
     (lag ~40 h) topped up with real-time METAR observations from api.weather.gov.
     Window weather itself comes from the latest archived MOS run (forecast mode)."""
+    if os.environ.get("SEACRIME_OFFLINE"):
+        return wx_obs
     try:
         from ..ingest.weather import fetch_nws_observations
 
@@ -109,7 +112,7 @@ def issue_forecasts(cfg: Config, categories: list[str], models: list[str] | None
                 "model_version": version,
                 "category": cat,
                 "event_time": env.event_time,
-                "horizons": horizons,
+                "horizons": sorted(int(h) for h in preds["horizon_h"].unique()),  # only horizons actually predicted
                 "data_versions": env.data_versions,
                 "feature_cutoffs": cutoffs,
                 "provenance": "actual",

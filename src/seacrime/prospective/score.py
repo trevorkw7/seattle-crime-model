@@ -64,6 +64,8 @@ def score_all(cfg: Config, now: pd.Timestamp | None = None) -> int:
             if preds is None:
                 preds = store.load_predictions(f["forecast_id"])  # verifies SHA-256
             p = preds[preds["horizon_h"] == h]
+            if p.empty:
+                continue
             obs = observed_counts(inc, grid, t0, end).reindex(p["cell"].to_numpy(), fill_value=0).to_numpy().astype(float)
             mu = p["expected"].to_numpy()
             st = per_issue_stats(np.zeros(len(mu), dtype=np.int64), obs, mu, p["p_any"].to_numpy(), 0.0, len(mu))
