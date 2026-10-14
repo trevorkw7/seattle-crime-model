@@ -121,3 +121,23 @@ def process_fire_911(cfg: Config, snap: Path | None = None) -> dict:
     }
     log.info("fire_911 processed: %s", summary)
     return summary
+
+
+def main() -> None:
+    """python -m seacrime.ingest.process  — process the latest snapshot of each core source."""
+    import argparse
+
+    from ..config import load_config
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("sources", nargs="*", default=["spd_crime", "spd_calls", "fire_911"])
+    args = ap.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    cfg = load_config()
+    fns = {"spd_crime": process_spd_crime, "spd_calls": process_spd_calls, "fire_911": process_fire_911}
+    for s in args.sources:
+        print(s, fns[s](cfg))
+
+
+if __name__ == "__main__":
+    main()

@@ -102,8 +102,8 @@ def load_env(cfg: Config, category: str, event_time: str = "report", with_contex
     grid = Grid.load(d / "grid.json")
     active = np.load(d / "active.npy")
     names = [f"{c}_report" for c in cfg["categories"]] + ["calls", "fire"]
-    cubes = {n: Cube.load(d, n) for n in names if (d / f"{n}.npy").exists()}
-    target = cubes[f"{category}_report"] if event_time == "report" else Cube.load(d, f"{category}_{event_time}")
+    cubes = {n: Cube.load(d, n, mmap=True) for n in names if (d / f"{n}.npy").exists()}
+    target = cubes[f"{category}_report"] if event_time == "report" else Cube.load(d, f"{category}_{event_time}", mmap=True)
     ctx = load_context(cfg, grid, CUBE_ORIGIN) if with_context else None
     attrs = pd.read_parquet(d / "cell_attrs.parquet")
     return Env(cfg, grid, active, cubes, target, category, event_time, ctx, attrs, data_versions=data_versions(cfg))

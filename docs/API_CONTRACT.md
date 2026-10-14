@@ -118,3 +118,23 @@ below `min_count` (k-anonymity style suppression, default 3) are reported as
  "jobs": [{"name": "hourly_forecast", "last_run": "...", "last_status": "ok" | "error",
            "message": "..."}]}
 ```
+
+## Clarifications (v1.1)
+
+* `provenance.kind` may also be `"replay"`: a forecast reconstructed for a past
+  issue time using only data available then, with models trained before the
+  backtest test period; scored against real outcomes but never a live forecast.
+* `forecasts/index.json` items: `provenance_kind` ∈ {actual, replay, demo};
+  `status` ∈ {frozen, awaiting_data, scored_provisional, scored_mature}; `t0` is the
+  start of the earliest window.
+* `score.per_horizon[h]` uses `predicted_total` and `capture_5|10|20`.
+* Evaluation rows carry `event_time` (`report` | `offense`); the primary target is
+  `meta.event_time`. `ci` holds 90 % day-block-bootstrap intervals (`ci_level: 0.9`).
+* `ablations[*].delta_vs_full` = capture@10 % of the ablated model **minus** the full
+  model (negative ⇒ the removed feature group helped); `delta_ci90` likewise.
+* `stability.by_precinct[*].by_precinct[*]` = `{precinct, obs, calib, capture_10_within, deviance}`;
+  `stability.by_month[*].by_month[*]` = `{month: "YYYY-MM", capture_10, poisson_deviance, observed_total, calibration_in_large}`.
+* `prospective.timeseries[*]`: `issued_at` is the freeze time, `window_start` the window start; `source` ∈ {live, replay}.
+* `history/<category>.json`: every forecast cell is listed; counts below `min_count`
+  (including zero) are `null`, so small counts are indistinguishable from zero.
+* `lag_sensitivity`: LightGBM vs seasonal at h = 24 for alternative crime-data availability lags.

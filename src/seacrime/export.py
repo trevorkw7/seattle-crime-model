@@ -228,7 +228,9 @@ class Exporter:
                     "start": _iso(cube.origin + pd.Timedelta(hours=s)),
                     "end": _iso(end),
                     "total": int(tot[self.act_flat].sum()),
-                    "cells": {self.cell_id[int(f)]: (int(tot[f]) if tot[f] >= min_count else None) for f in self.act_flat if tot[f] > 0},
+                    # every active cell is listed; counts below min_count (including zero) are
+                    # all reported as null so suppressed cells cannot be told apart
+                    "cells": {self.cell_id[int(f)]: (int(tot[f]) if tot[f] >= min_count else None) for f in self.act_flat},
                 }
             # citywide hour-of-week profile over the last 365 days (local time)
             s = max(e - 24 * 365, 0)
@@ -269,6 +271,7 @@ class Exporter:
                         "brier": _r(r["brier"], 6), "ece": _r(r["ece"], 6), "calibration_in_large": _r(r["calibration_in_large"], 4),
                         "observed_total": r["observed_total"], "n_issue_times": r["n_issue_times"], "alpha": _r(r.get("alpha"), 4),
                         "ci": {k: [_r(a), _r(b)] for k, (a, b) in r.get("ci90", {}).items()},
+                        "ci_level": 0.9,
                         "event_windows": r.get("_event_windows"),
                     })
                     cal.append({"model_id": m, "category": cat, "event_time": et, "horizon_h": int(h), "bins": r.get("_bins", [])})
@@ -279,8 +282,9 @@ class Exporter:
                 for a, ar in hr.get("ablations", {}).items():
                     abl.append({"name": a, "model_id": "lgbm", "category": cat, "event_time": et, "horizon_h": int(h),
                                 "capture_10": _r(ar["capture_10"]), "poisson_deviance": _r(ar["poisson_deviance"], 5), "brier": _r(ar["brier"], 6),
-                                "delta_vs_full": _r(ar["delta_capture_10_full_minus_ablated"]["delta"], 5),
-                                "delta_ci90": [_r(x, 5) for x in ar["delta_capture_10_full_minus_ablated"]["ci90"]],
+                                # sign: ablated minus full (negative = removing the group hurts capture)
+                                "delta_vs_full": _r(-ar["delta_capture_10_full_minus_ablated"]["delta"], 5),
+                                "delta_ci90": sorted(_r(-x, 5) for x in ar["delta_capture_10_full_minus_ablated"]["ci90"]),
                                 "delta_deviance_full_minus_ablated": _r(ar["delta_deviance_full_minus_ablated"], 6)})
                 for m, r in hr.get("provisional", {}).items():
                     rows.append({"model_id": m, "category": cat, "event_time": et, "horizon_h": int(h), "maturity": "provisional", "section": "backtest_provisional",
@@ -306,11 +310,11 @@ class Exporter:
         fc = self.store.list_forecasts()
         if s.empty or fc.empty:
             return {"rows": [], "timeseries": []}
-        s = s.merge(fc[["forecast_id", "model_id", "category", "t0", "provenance"]], on="forecast_id")
+        s = s.merge(fc[["forecast_id", "model_id", "category", "issued_at", "t0", "provenance"]], on="forecast_id")
         ts, rows = [], []
         for _, r in s.iterrows():
             m = r["metrics"]
-            ts.append({"issued_at": _iso(r["t0"]), "model_id": r["model_id"], "category": r["category"], "horizon_h": int(r["horizon_h"]),
+            ts.append({"issued_at": _iso(r["issued_at"]), "window_start": _iso(r["t0"]), "model_id": r["model_id"], "category": r["category"], "horizon_h": int(r["horizon_h"]),
                        "capture_10": _r(m["capture_10"]), "poisson_deviance": _r(m["poisson_deviance"], 5), "observed_total": m["observed_total"],
                        "maturity": r["maturity"], "source": "live" if r["provenance"] == "actual" else "replay"})
         df = pd.DataFrame(ts)

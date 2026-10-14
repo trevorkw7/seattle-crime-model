@@ -8,6 +8,7 @@ feature construction for every issue time fully vectorised.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -45,10 +46,17 @@ class Cube:
         return self._S
 
     def save(self, d: Path) -> None:
+        """Atomic write (temp file + rename) so processes that memory-map the
+        previous version keep a consistent view."""
         d.mkdir(parents=True, exist_ok=True)
-        np.save(d / f"{self.name}.npy", self.counts)
-        np.save(d / f"{self.name}.unlocated.npy", self.n_unlocated)
-        (d / f"{self.name}.json").write_text(json.dumps({"origin": self.origin.isoformat(), **self.meta}, indent=2, default=str))
+        for suffix, arr in ((".npy", self.counts), (".unlocated.npy", self.n_unlocated)):
+            tmp = d / f".{self.name}{suffix}.tmp"
+            with open(tmp, "wb") as f:
+                np.save(f, arr)
+            os.replace(tmp, d / f"{self.name}{suffix}")
+        tmp = d / f".{self.name}.json.tmp"
+        tmp.write_text(json.dumps({"origin": self.origin.isoformat(), **self.meta}, indent=2, default=str))
+        os.replace(tmp, d / f"{self.name}.json")
 
     @classmethod
     def load(cls, d: Path, name: str, mmap: bool = False) -> Cube:
