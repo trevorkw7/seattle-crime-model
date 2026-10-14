@@ -38,7 +38,71 @@ def load_weather(processed: Path, origin: pd.Timestamp) -> pd.DataFrame | None:
     return w[w.index >= 0]
 
 
-def load_events(processed: Path, origin: pd.Timestamp, categories: tuple[str, ...] | None = None) -> pd.DataFrame | None:
+def load_weather_forecasts(processed: Path, origin: pd.Timestamp, horizons: list[int], source: str = "iem_mos:GFS") -> dict | None:
+    """For every issue hour t, values from the latest MOS run *issued* at or
+    before t, evaluated at the window midpoint t + h/2 (linear interpolation in
+    valid time; 6-hour precipitation fields take the period covering the
+    midpoint). Cached to parquet."""
+    p = processed / "weather_forecast_hourly.parquet"
+    if not p.exists():
+        return None
+    cache = processed / f"weather_fc_by_issue_{source.replace(':', '_')}.parquet"
+    if cache.exists() and cache.stat().st_mtime >= p.stat().st_mtime:
+        tab = pd.read_parquet(cache)
+    else:
+        f = pd.read_parquet(p)
+        f = f[f["source"] == source].copy()
+        f["iss_h"] = ((pd.to_datetime(f["issued_at_utc"], utc=True) - origin) / pd.Timedelta(hours=1)).apply(np.ceil).astype(np.int64)
+        f["val_h"] = ((pd.to_datetime(f["valid_ts_utc"], utc=True) - origin) // pd.Timedelta(hours=1)).astype(np.int64)
+        f = f.sort_values(["iss_h", "val_h"])
+        runs = {k: g for k, g in f.groupby("iss_h")}
+        run_keys = np.array(sorted(runs))
+        t_all = np.arange(max(run_keys.min(), 0), run_keys.max() + 24 * 3)
+        rows = []
+        for h in horizons:
+            ridx = np.searchsorted(run_keys, t_all, side="right") - 1
+            for t, ri in zip(t_all, ridx, strict=True):
+                if ri < 0:
+                    continue
+                g = runs[run_keys[ri]]
+                mid = t + h / 2.0
+                vh = g["val_h"].to_numpy(dtype=float)
+                if mid > vh.max() + 3:  # run too old to cover the window
+                    continue
+                row = {"h": h, "t": t, "run_age_h": float(t - run_keys[ri])}
+                for c in ("temp_c", "wind_ms", "rel_humidity"):
+                    v = g[c].to_numpy(dtype=float)
+                    ok = np.isfinite(v)
+                    row[c] = float(np.interp(mid, vh[ok], v[ok])) if ok.sum() >= 2 else np.nan
+                for c in ("pop_6h_pct", "qpf_6h_cat"):
+                    v = g[c].to_numpy(dtype=float)
+                    ok = np.isfinite(v)
+                    if ok.any():
+                        # 6-h fields are valid for the 6 h ending at valid time
+                        cand = vh[ok]
+                        j = np.searchsorted(cand, mid, side="left")
+                        row[c] = float(v[ok][min(j, ok.sum() - 1)])
+                    else:
+                        row[c] = np.nan
+                rows.append(row)
+        tab = pd.DataFrame(rows)
+        tab.to_parquet(cache, index=False)
+    return {h: g.drop(columns=["h"]).set_index("t") for h, g in tab.groupby("h") if h in horizons}
+
+
+SPORTS = {"mlb", "nfl", "mls", "nhl", "wnba", "ncaaf", "nwsl", "soccer_intl"}
+MAJOR_ATTENDANCE = 10_000
+
+
+def load_events(processed: Path, origin: pd.Timestamp, typical_before: str = "2025-01-01") -> pd.DataFrame | None:
+    """Scheduled events with leakage-safe attributes.
+
+    * ``known_h``: hour index from which the event may be used
+      (``schedule_known_at_utc``; conservative estimate of schedule publication).
+    * ``attendance``: only *ex-ante* values. Sports attendance is announced after
+      the game, so it is replaced by the category median over games before
+      ``typical_before``; permit attendance is the applicant's advance estimate.
+    """
     p = processed / "events.parquet"
     if not p.exists():
         return None
@@ -46,21 +110,31 @@ def load_events(processed: Path, origin: pd.Timestamp, categories: tuple[str, ..
     if "status" in e:
         e = e[~e["status"].astype(str).str.lower().isin({"cancelled", "canceled", "postponed"})]
     e = e.dropna(subset=["lat", "lon", "start_utc"])
-    if categories:
-        e = e[e["category"].isin(categories)]
-    e = e[e["category"] != "holiday"]
+    e = e[e["category"] != "holiday"].copy()
     start = pd.to_datetime(e["start_utc"], utc=True)
     end = pd.to_datetime(e["end_utc"], utc=True).fillna(start + pd.Timedelta(hours=3))
+    if "schedule_known_at_utc" in e:
+        known = pd.to_datetime(e["schedule_known_at_utc"], utc=True).fillna(start - pd.Timedelta(days=1))
+    else:
+        known = start - pd.Timedelta(days=1)
+    att = pd.to_numeric(e["attendance"], errors="coerce") if "attendance" in e else pd.Series(np.nan, index=e.index)
+    kind = e["attendance_kind"].astype(str) if "attendance_kind" in e else pd.Series("", index=e.index)
+    ex_ante = att.where(kind == "applicant_estimate")
+    hist = (start < pd.Timestamp(typical_before, tz="UTC")) & (kind == "announced_post_event")
+    typical = att[hist].groupby(e.loc[hist, "category"]).median()
+    att_safe = ex_ante.fillna(e["category"].map(typical)).fillna(att[hist].median())  # new categories (e.g. 2026 World Cup)
     out = pd.DataFrame(
         {
             "start_h": ((start - origin) // pd.Timedelta(hours=1)).astype(np.int64),
             "end_h": ((end - origin) // pd.Timedelta(hours=1)).astype(np.int64) + 1,
+            "known_h": ((known - origin) // pd.Timedelta(hours=1)).astype(np.int64),
             "lat": e["lat"].astype(float),
             "lon": e["lon"].astype(float),
             "category": e["category"].astype(str),
-            "attendance": pd.to_numeric(e.get("attendance"), errors="coerce") if "attendance" in e else np.nan,
+            "attendance": att_safe.astype(float),
         }
     )
+    out["major"] = out["category"].isin(SPORTS) | (out["attendance"] >= MAJOR_ATTENDANCE)
     return out.reset_index(drop=True)
 
 
@@ -143,6 +217,7 @@ def load_context(cfg: Config, grid: Grid, origin: pd.Timestamp, cache: bool = Tr
         np.savez(static_cache, **static)
     ctx = ContextData(
         weather=load_weather(processed, origin),
+        weather_fc=load_weather_forecasts(processed, origin, cfg.horizons),
         events=load_events(processed, origin),
         transit_how=load_transit_how(processed, grid),
         static=static,

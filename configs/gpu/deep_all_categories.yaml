@@ -1,0 +1,20 @@
+job: deep_all_categories
+category: [property, violent, all_located]
+event_time: report
+horizons: [1, 3, 6, 24]
+archs: [convlstm, stgnn, transformer]
+compare_with: [seasonal, lgbm]
+device: cuda
+n_train_issue_times: 8000
+n_val_issue_times: 1500
+test_stride_h: 1
+deep:
+  epochs: 60
+  samples_per_epoch: 8192
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  patience: 6
+  hist_days: 84
+  max_tokens: 2048
+seed: 0

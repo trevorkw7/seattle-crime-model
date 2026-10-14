@@ -33,24 +33,28 @@ def data_end(cfg: Config) -> pd.Timestamp:
     return pd.Timestamp(store["last_seen_at_utc"].max()).floor("h") if log_p.exists() else pd.Timestamp.now("UTC").floor("h")
 
 
-def build_all(cfg: Config) -> dict:
+def build_all(cfg: Config, extend_to: pd.Timestamp | None = None) -> dict:
+    """Build all cubes. ``extend_to`` pads the time axis with empty future hours
+    (needed for live forecasting); ``data_end`` in each cube's metadata always
+    records the end of *observed* data, which backtests use."""
     grid = Grid.from_config(cfg)
     out = cube_dir(cfg)
     out.mkdir(parents=True, exist_ok=True)
     grid.save(out / "grid.json")
     store = load_store(cfg.processed_dir)
-    end = data_end(cfg)
-    summary: dict = {"origin": CUBE_ORIGIN.isoformat(), "end": end.isoformat(), "grid": grid.__dict__, "cubes": {}}
+    d_end = data_end(cfg)
+    end = max(d_end, pd.Timestamp(extend_to).ceil("h")) if extend_to is not None else d_end
+    summary: dict = {"origin": CUBE_ORIGIN.isoformat(), "end": end.isoformat(), "data_end": d_end.isoformat(), "grid": grid.__dict__, "cubes": {}}
 
     cats = cfg["categories"]
     for cat, cdef in cats.items():
         inc = incidents(store, cdef, event_time="report")
-        cube = build_cube(f"{cat}_report", inc["ts_utc"], inc["lon"], inc["lat"], grid, CUBE_ORIGIN, end, meta={"category": cat, "event_time": "report"})
+        cube = build_cube(f"{cat}_report", inc["ts_utc"], inc["lon"], inc["lat"], grid, CUBE_ORIGIN, end, meta={"category": cat, "event_time": "report", "data_end": d_end.isoformat()})
         cube.save(out)
         summary["cubes"][cube.name] = cube.meta
         if cat == "property":
             inc_o = incidents(store, cdef, event_time="offense")
-            cube_o = build_cube(f"{cat}_offense", inc_o["ts_utc"], inc_o["lon"], inc_o["lat"], grid, CUBE_ORIGIN, end, meta={"category": cat, "event_time": "offense"})
+            cube_o = build_cube(f"{cat}_offense", inc_o["ts_utc"], inc_o["lon"], inc_o["lat"], grid, CUBE_ORIGIN, end, meta={"category": cat, "event_time": "offense", "data_end": d_end.isoformat()})
             cube_o.save(out)
             summary["cubes"][cube_o.name] = cube_o.meta
         log.info("cube %s: %s", cat, cube.meta["n_located"])
@@ -58,13 +62,13 @@ def build_all(cfg: Config) -> dict:
     calls_p = cfg.processed_dir / "spd_calls.parquet"
     if calls_p.exists():
         calls = pd.read_parquet(calls_p, columns=["ts_utc", "lat", "lon"])
-        c = build_cube("calls", calls["ts_utc"], calls["lon"], calls["lat"], grid, CUBE_ORIGIN, end, meta={"source": "spd_calls"})
+        c = build_cube("calls", calls["ts_utc"], calls["lon"], calls["lat"], grid, CUBE_ORIGIN, end, meta={"source": "spd_calls", "data_end": d_end.isoformat()})
         c.save(out)
         summary["cubes"]["calls"] = c.meta
     fire_p = cfg.processed_dir / "fire_911.parquet"
     if fire_p.exists():
         fire = pd.read_parquet(fire_p, columns=["ts_utc", "lat", "lon"])
-        f = build_cube("fire", fire["ts_utc"], fire["lon"], fire["lat"], grid, CUBE_ORIGIN, end, meta={"source": "fire_911"})
+        f = build_cube("fire", fire["ts_utc"], fire["lon"], fire["lat"], grid, CUBE_ORIGIN, end, meta={"source": "fire_911", "data_end": d_end.isoformat()})
         f.save(out)
         summary["cubes"]["fire"] = f.meta
 

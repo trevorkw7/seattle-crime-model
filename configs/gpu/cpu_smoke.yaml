@@ -1,0 +1,16 @@
+# Tiny configuration used in CI / CPU-only environments to verify the code path.
+job: cpu_smoke
+category: property
+event_time: report
+horizons: [6]
+archs: [tcn, convlstm, stgnn, transformer, hawkes]
+compare_with: [seasonal]
+device: cpu
+n_train_issue_times: 64
+n_val_issue_times: 32
+test_stride_h: 97
+deep:
+  epochs: 1
+  samples_per_epoch: 32
+  batch_size: 8
+seed: 0

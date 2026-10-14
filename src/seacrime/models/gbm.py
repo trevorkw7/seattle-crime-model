@@ -63,8 +63,8 @@ class CatBoostModel(CountModel):
     model_id: str = "catboost"
     family: str = "gbm"
     cb: object = None
-    iterations: int = 1500
-    learning_rate: float = 0.08
+    iterations: int = 800
+    learning_rate: float = 0.1
     depth: int = 7
     exclude: tuple[str, ...] = ()
 

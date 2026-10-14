@@ -42,7 +42,7 @@ def train_production(
     registry = json.loads(reg_p.read_text()) if reg_p.exists() else {}
     for cat in categories:
         env = load_env(cfg, cat)
-        data_end = pd.Timestamp(env.target.meta["end"])
+        data_end = pd.Timestamp(env.target.meta.get("data_end", env.target.meta["end"]))
         cutoff = (data_end - pd.Timedelta(days=cfg["availability"]["maturity_days"])).floor("D")
         val_start = cutoff - pd.Timedelta(days=val_days)
         train_start = pd.Timestamp(cfg["training"]["start"], tz="UTC") + pd.Timedelta(days=30)

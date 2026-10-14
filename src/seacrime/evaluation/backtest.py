@@ -34,7 +34,7 @@ from ..context import load_context
 from ..dataset import Cube
 from ..features import FeatureBuilder, FeatureConfig
 from ..grid import Grid
-from ..models.base import ColumnModel, CountModel, fit_dispersion
+from ..models.base import ColumnModel, CountModel
 from .metrics import bootstrap_ci, calibration_bins, paired_bootstrap_delta, per_issue_stats, summarize
 
 log = logging.getLogger(__name__)
@@ -188,7 +188,7 @@ def tune_baselines(env: Env, fcfg: FeatureConfig, t_val: np.ndarray, h: int) -> 
     """Pick seasonal shrinkage kappa and hotspot bandwidth on validation deviance."""
     best = {}
     groups = ("crime",)
-    for kappa in (13.0, 52.0, 104.0, 208.0, 416.0):
+    for kappa in (26.0, 104.0, 416.0, 1664.0, 6656.0):
         fb = env.builder(FeatureConfig(**{**asdict(fcfg), "seasonal_kappa": kappa, "groups": groups}))
         X, y = build_xy(fb, t_val, h)
         st = per_issue_stats(X["_t"].to_numpy(), y, X["base_seasonal"].to_numpy(), 1 - np.exp(-X["base_seasonal"].to_numpy()), 0.0, env.n_active)
@@ -281,22 +281,27 @@ def run_backtest(
     save_models: bool = True,
     with_context: bool = True,
     deep_kw: dict | None = None,
+    tag: str = "",
 ) -> dict:
     t0 = time.time()
     deep_kw = deep_kw or {}
     env = load_env(cfg, category, event_time, with_context=with_context)
-    data_end = pd.Timestamp(env.target.meta["end"])
+    data_end = pd.Timestamp(env.target.meta.get("data_end", env.target.meta["end"]))
     split = default_split(cfg, data_end)
     lag = cfg["availability"]["crime_feature_lag_h"]
     base_fcfg = FeatureConfig(crime_lag_h=lag, calls_lag_h=cfg["availability"]["calls_feature_lag_h"], fire_lag_h=cfg["availability"]["fire911_feature_lag_h"])
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    out = out_root / f"{category}_{event_time}" / run_id
+    out = out_root / f"{category}_{event_time}{'_' + tag if tag else ''}" / run_id
     out.mkdir(parents=True, exist_ok=True)
     prec_map = env.cell_attrs.set_index("cell")["precinct"]
     act_flat = np.flatnonzero(env.active.ravel())
     precinct_of_cell = prec_map.reindex(act_flat).fillna("UNKNOWN").astype(str).to_numpy()
     report: dict = {
         "run_id": run_id,
+        "tag": tag,
+        "models_requested": models,
+        "n_train_issue_times": n_train,
+        "test_stride_h": test_stride,
         "category": category,
         "event_time": event_time,
         "split": split.as_dict(),
@@ -355,7 +360,7 @@ def run_backtest(
             accs = {m: EvalAccumulator(env.n_active, precinct_of_cell) for m in list(fitted) + [f"abl:{a}" for a in abl_models]}
             for i in range(0, len(tt), 300):
                 X, y = fb.build(tt[i : i + 300], h)
-                evc = X["ev_city"].to_numpy() if "ev_city" in X else None
+                evc = X["ev_major_city"].to_numpy() if "ev_major_city" in X else None
                 for m, model in list(fitted.items()) + [(f"abl:{a}", mm) for a, mm in abl_models.items()]:
                     d = model.predict_dist(X)
                     accs[m].add(X["_t"].to_numpy(), y, d["expected"].to_numpy(), d["p_any"].to_numpy(), model.alpha, evc)
@@ -396,7 +401,7 @@ def run_backtest(
         report["lag_sensitivity"] = run_lag_sensitivity(env, split, base_fcfg, lag_sensitivity, n_train, n_val)
     report["elapsed_s"] = time.time() - t0
     (out / "report.json").write_text(json.dumps(report, indent=2, default=_json_default))
-    latest = out_root / f"{category}_{event_time}" / "LATEST"
+    latest = out_root / f"{category}_{event_time}{'_' + tag if tag else ''}" / "LATEST"
     latest.write_text(run_id)
     return report
 
@@ -459,12 +464,16 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--test-stride", type=int, default=1)
     ap.add_argument("--no-context", action="store_true")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--tag", default="")
+    ap.add_argument("--deep-epochs", type=int, default=12)
+    ap.add_argument("--deep-samples", type=int, default=768)
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     cfg = load_config()
     out_root = Path(args.out) if args.out else cfg.artifacts_root / "backtests"
     rep = run_backtest(cfg, args.category, args.horizons, args.models, out_root, args.event_time, args.n_train, args.n_val,
-                       args.test_stride, args.ablations, args.lag_sensitivity, with_context=not args.no_context)
+                       args.test_stride, args.ablations, args.lag_sensitivity, with_context=not args.no_context,
+                       deep_kw={"epochs": args.deep_epochs, "samples_per_epoch": args.deep_samples}, tag=args.tag)
     for h, hr in rep["horizons"].items():
         for m, r in hr["models"].items():
             print(f"h={h:>2} {m:<12} cap5={r['capture_5']:.3f} cap10={r['capture_10']:.3f} cap20={r['capture_20']:.3f} dev={r['poisson_deviance']:.4f} nll={r['nll']:.4f} brier={r['brier']:.5f} ece={r['ece']:.5f} cal={r['calibration_in_large']:.3f}")

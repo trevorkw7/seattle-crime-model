@@ -8,10 +8,11 @@ Availability rules (enforced here and tested in tests/test_leakage.py):
 * Fire 911 features use only hours ``< t - L_fire`` (real-time feed).
 * Same-hour-of-week history uses past weeks whose window ends before the
   crime availability cutoff.
-* Calendar, static geography, scheduled events (schedules are published weeks
-  in advance) and weather are known/forecastable at t. Historical backtests
-  use observed weather as a stand-in for a weather forecast — flagged
-  ``weather_mode='observed_proxy'`` — or past-only weather (``'past_only'``).
+* Calendar, static geography and scheduled events (schedules are published
+  weeks in advance) are known at t. Weather uses archived NWS MOS forecasts
+  whose *issue* time precedes t (``weather_mode='forecast'``, default) plus
+  observed weather from the previous 24 h; ``'observed_proxy'`` (oracle use of
+  observed window weather) exists only as a labelled upper-bound ablation.
 * Features never depend on the target cube when the target uses offense time:
   features are always built from report-time (availability-consistent) cubes.
 
@@ -38,7 +39,8 @@ HOURS_YEAR = 8760
 class ContextData:
     """Optional contextual sources aligned to the cube's hourly index."""
 
-    weather: pd.DataFrame | None = None  # index: hour idx; cols temp_c, precip_mm, wind_ms
+    weather: pd.DataFrame | None = None  # index: hour idx; cols temp_c, precip_mm, wind_ms (observed)
+    weather_fc: dict | None = None  # horizon -> DataFrame indexed by issue hour idx (forecast issued <= t)
     events: pd.DataFrame | None = None  # cols start_h, end_h, lat, lon, category, attendance
     transit_how: np.ndarray | None = None  # (168, R, C) scheduled departures per hour-of-week
     static: dict[str, np.ndarray] = field(default_factory=dict)  # name -> (R, C)
@@ -53,7 +55,7 @@ class FeatureConfig:
     seasonal_kappa: float = 26.0
     hotspot_sigma: float = 1.0
     hotspot_window_h: int = HOURS_YEAR
-    weather_mode: str = "observed_proxy"  # observed_proxy | past_only | none
+    weather_mode: str = "forecast"  # forecast (archived MOS issued <= t) | observed_proxy (oracle) | past_only | none
     groups: tuple[str, ...] = ("crime", "neighbors", "seasonal", "other_cats", "calls", "fire", "calendar", "static", "weather", "events", "transit")
 
 
@@ -245,6 +247,10 @@ class FeatureBuilder:
             cols["transit_deps"] = self._flat(acc)
 
         # --- weather
+        if "weather" in g and self.f.weather_mode == "forecast" and self.ctx.weather_fc is not None and h in self.ctx.weather_fc:
+            wf = self.ctx.weather_fc[h].reindex(t)
+            for c in wf.columns:
+                cols[f"wxf_{c}"] = self._bcast(wf[c].to_numpy(dtype=float))
         if "weather" in g and self.ctx.weather is not None and self.f.weather_mode != "none":
             wx = self.ctx.weather
             if self.f.weather_mode == "observed_proxy":
@@ -268,34 +274,39 @@ class FeatureBuilder:
         return X, y
 
     def _event_features(self, t: np.ndarray, h: int) -> dict[str, np.ndarray]:
+        """Events overlapping the window (with 2 h arrival/dispersal margins) whose
+        schedule was public at issue time; ``major`` = stadium/arena sports or
+        permits with >= 10k expected attendance."""
         ev = self.ctx.events
         xs, ys = self._x.ravel()[self.active_flat], self._y.ravel()[self.active_flat]
         ex, ey = self.grid.project(ev["lon"].to_numpy(), ev["lat"].to_numpy())
-        # distance (km) from each active cell to each event venue
         d = np.sqrt((xs[:, None] - ex[None]) ** 2 + (ys[:, None] - ey[None]) ** 2) / 1000.0
-        s = ev["start_h"].to_numpy() - 2  # arrival window
-        e = ev["end_h"].to_numpy() + 2  # dispersal window
-        att = np.log1p(ev["attendance"].fillna(20000).to_numpy(dtype=float))
-        n = len(t)
-        near1 = np.zeros((n, len(xs)), np.float32)
-        near3 = np.zeros((n, len(xs)), np.float32)
-        att3 = np.zeros((n, len(xs)), np.float32)
+        s = ev["start_h"].to_numpy() - 2
+        e = ev["end_h"].to_numpy() + 2
+        known = ev["known_h"].to_numpy() if "known_h" in ev else s - 24
+        major = ev["major"].to_numpy() if "major" in ev else np.ones(len(ev), bool)
+        att = np.log1p(ev["attendance"].fillna(1000).to_numpy(dtype=float))
+        n, m = len(t), len(xs)
+        out = {k: np.zeros((n, m), np.float32) for k in ("ev_near_1km", "ev_near_3km", "ev_major_near_1km", "ev_major_near_3km", "ev_logatt_3km")}
         city = np.zeros(n, np.float32)
+        city_major = np.zeros(n, np.float32)
         for i, ti in enumerate(t):
-            act = np.flatnonzero((s < ti + h) & (e > ti))
+            act = np.flatnonzero((s < ti + h) & (e > ti) & (known <= ti))
             if len(act) == 0:
                 continue
             city[i] = len(act)
+            city_major[i] = major[act].sum()
             dd = d[:, act]
-            near1[i] = (dd <= 1.0).sum(1)
-            near3[i] = (dd <= 3.0).sum(1)
-            att3[i] = ((dd <= 3.0) * att[act][None]).sum(1)
-        return {
-            "ev_near_1km": near1.ravel(),
-            "ev_near_3km": near3.ravel(),
-            "ev_logatt_3km": att3.ravel(),
-            "ev_city": np.repeat(city, len(xs)),
-        }
+            mj = major[act][None]
+            out["ev_near_1km"][i] = (dd <= 1.0).sum(1)
+            out["ev_near_3km"][i] = (dd <= 3.0).sum(1)
+            out["ev_major_near_1km"][i] = ((dd <= 1.0) & mj).sum(1)
+            out["ev_major_near_3km"][i] = ((dd <= 3.0) & mj).sum(1)
+            out["ev_logatt_3km"][i] = ((dd <= 3.0) * att[act][None]).sum(1)
+        res = {k: v.ravel() for k, v in out.items()}
+        res["ev_city"] = np.repeat(city, m)
+        res["ev_major_city"] = np.repeat(city_major, m)
+        return res
 
 
 def _window_agg(wx: pd.DataFrame, t: np.ndarray, h: int, suffix: str = "") -> dict[str, np.ndarray]:

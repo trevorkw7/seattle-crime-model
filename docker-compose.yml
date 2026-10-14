@@ -1,0 +1,22 @@
+# Local / single-VM deployment. Binds to localhost only; put a TLS reverse proxy
+# in front before exposing publicly.
+services:
+  api:
+    build: .
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: [seacrime:/var/lib/seacrime]
+    env_file: [.env]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/healthz').status in (200,) else 1)"]
+      interval: 5m
+  scheduler:
+    build: .
+    volumes: [seacrime:/var/lib/seacrime]
+    env_file: [.env]
+    restart: unless-stopped
+    # hourly forecast cycle at :10; weekly retrain on Mondays 03:30 UTC
+    command: >
+      sh -c 'python scripts/scheduler.py'
+volumes:
+  seacrime: {}
