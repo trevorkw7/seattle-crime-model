@@ -113,11 +113,12 @@ def main() -> None:
             for lag, r in sorted(rep["lag_sensitivity"].items(), key=lambda x: int(x[0])):
                 L.append(f"| {lag} | {pct(r['lgbm_capture_10'])} | {pct(r['seasonal_capture_10'])} | {num(r['lgbm_deviance'], 5)} | {num(r['seasonal_deviance'], 5)} |")
             L.append("")
-        for h, hr in rep["horizons"].items():
+        for h, hr in sorted(rep["horizons"].items(), key=lambda x: -int(x[0])):
             lg = hr["models"].get("lgbm")
             if lg and lg.get("_precinct"):
-                L += [f"### Geographic stability (h = {h}, LightGBM)", "", "| precinct | observed | pred/obs | capture@10% within precinct | deviance |", "|---|---|---|---|---|"]
-                L += [f"| {p} | {int(d['obs'])} | {num(d['calib'], 3)} | {pct(d['capture_10_within'])} | {num(d['deviance'], 5)} |" for p, d in sorted(lg["_precinct"].items())]
+                L += [f"### Geographic stability (h = {h}, LightGBM)", "", "| precinct | observed (summed over overlapping windows) | pred/obs | capture@10% within precinct | deviance |", "|---|---|---|---|---|"]
+                L += [f"| {p} | {int(d['obs'])} | {num(d['calib'], 3) if d['obs'] > 0 else '–'} | {pct(d['capture_10_within']) if d['obs'] > 0 else '–'} | {num(d['deviance'], 5)} |"
+                      for p, d in sorted(lg["_precinct"].items())]
                 L.append("")
                 break
         compact[name] = {h: {m: {k: r.get(k) for k in ("capture_5", "capture_10", "capture_20", "poisson_deviance", "nll", "brier", "ece", "calibration_in_large", "ci90")}
