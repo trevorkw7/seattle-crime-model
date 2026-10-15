@@ -1,0 +1,42 @@
+# Optional zero-infrastructure scheduler: runs the prospective cycle on GitHub
+# Actions and keeps state in a GCS bucket. Disabled until the repository owner
+# sets the variable SEACRIME_ENABLE_SCHEDULE=true and configures credentials
+# (GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT, SEACRIME_STATE_URI).
+name: forecast-cycle
+
+on:
+  schedule:
+    - cron: "10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: forecast-cycle
+  cancel-in-progress: false
+
+jobs:
+  cycle:
+    if: vars.SEACRIME_ENABLE_SCHEDULE == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      SEACRIME_STATE_URI: ${{ vars.SEACRIME_STATE_URI }}
+      SOCRATA_APP_TOKEN: ${{ secrets.SOCRATA_APP_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      - run: pip install -e ".[catboost]" google-cloud-storage
+      - run: python scripts/state_sync.py pull
+      - run: python -m seacrime.prospective.cycle
+      - if: always()
+        run: python scripts/state_sync.py push

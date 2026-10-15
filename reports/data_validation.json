@@ -1,0 +1,700 @@
+{
+ "generated_at": "2026-10-14T19:30:26.972027+00:00",
+ "spd_crime": {
+  "snapshot_id": "20261014T185811Z",
+  "fetched_at_utc": "2026-10-14T18:58:11.272844+00:00",
+  "publisher_rows_updated_at": "2026-10-14T15:08:28+00:00",
+  "rows": 1568054,
+  "distinct_report_numbers": 1380758,
+  "offense_id_duplicates": 6,
+  "key_duplicates(report_number,offense_id)": 6,
+  "exact_duplicate_rows": 0,
+  "offenses_per_report": {
+   "mean": 1.14,
+   "50%": 1.0,
+   "max": 18.0
+  },
+  "missing_by_column": {
+   "report_number": {
+    "null": 0,
+    "dash_placeholder": 0,
+    "REDACTED": 0
+   },
+   "offense_id": {
+    "null": 0,
+    "dash_placeholder": 0,
+    "REDACTED": 0
+   },
+   "report_date_time": {
+    "null": 0,
+    "dash_placeholder": 0,
+    "REDACTED": 0
+   },
+   "offense_date": {
+    "null": 0,
+    "dash_placeholder": 0,
+    "REDACTED": 0
+   },
+   "nibrs_group_a_b": {
+    "null": 0,
+    "dash_placeholder": 1642,
+    "REDACTED": 0
+   },
+   "nibrs_crime_against_category": {
+    "null": 0,
+    "dash_placeholder": 1642,
+    "REDACTED": 0
+   },
+   "offense_sub_category": {
+    "null": 0,
+    "dash_placeholder": 0,
+    "REDACTED": 0
+   },
+   "shooting_type_group": {
+    "null": 0,
+    "dash_placeholder": 1557688,
+    "REDACTED": 0
+   },
+   "block_address": {
+    "null": 0,
+    "dash_placeholder": 172734,
+    "REDACTED": 228134
+   },
+   "latitude": {
+    "null": 0,
+    "dash_placeholder": 0,
+    "REDACTED": 228134
+   },
+   "longitude": {
+    "null": 0,
+    "dash_placeholder": 0,
+    "REDACTED": 228134
+   },
+   "beat": {
+    "null": 0,
+    "dash_placeholder": 11217,
+    "REDACTED": 0
+   },
+   "precinct": {
+    "null": 0,
+    "dash_placeholder": 9763,
+    "REDACTED": 0
+   },
+   "sector": {
+    "null": 0,
+    "dash_placeholder": 11207,
+    "REDACTED": 0
+   },
+   "neighborhood": {
+    "null": 0,
+    "dash_placeholder": 745972,
+    "REDACTED": 0
+   },
+   "reporting_area": {
+    "null": 0,
+    "dash_placeholder": 9357,
+    "REDACTED": 228134
+   },
+   "offense_category": {
+    "null": 0,
+    "dash_placeholder": 0,
+    "REDACTED": 0
+   },
+   "nibrs_offense_code_description": {
+    "null": 0,
+    "dash_placeholder": 1642,
+    "REDACTED": 0
+   },
+   "nibrs_offense_code": {
+    "null": 0,
+    "dash_placeholder": 1642,
+    "REDACTED": 0
+   },
+   "census_block_2020": {
+    "null": 3,
+    "dash_placeholder": 647116,
+    "REDACTED": 228134
+   }
+  },
+  "report_time_range_local": [
+   "1975-12-16 15:00:00",
+   "2026-10-14 00:08:05"
+  ],
+  "report_year_counts": {
+   "2005": 10,
+   "2006": 37,
+   "2007": 282,
+   "2008": 85992,
+   "2009": 85038,
+   "2010": 81960,
+   "2011": 76429,
+   "2012": 74571,
+   "2013": 79676,
+   "2014": 84332,
+   "2015": 83964,
+   "2016": 87052,
+   "2017": 89812,
+   "2018": 92650,
+   "2019": 84103,
+   "2020": 87000,
+   "2021": 81736,
+   "2022": 87620,
+   "2023": 83329,
+   "2024": 82637,
+   "2025": 78398,
+   "2026": 61400
+  },
+  "records_before_2008": 355,
+  "timezone": "Timestamps are floating local time (America/Los_Angeles), no offset; converted to UTC.",
+  "dst_ambiguous_report_times": 222,
+  "dst_nonexistent_report_times": 0,
+  "report_time_seconds_precision_share_since_2020": 0.9844143599231481,
+  "offense_time_exact_midnight_share_since_2019_06": 0.09090016543368662,
+  "report_minus_offense_hours_quantiles_since_2019_06": {
+   "0.1": 1.0,
+   "0.25": 2.1,
+   "0.5": 12.5,
+   "0.75": 60.5,
+   "0.9": 244.1,
+   "0.95": 641.6,
+   "0.99": 5446.0
+  },
+  "report_before_offense_share": 0.002904498454479555,
+  "location_status_counts": {
+   "ok": 1166409,
+   "redacted": 228134,
+   "unknown": 173210,
+   "out_of_area": 295
+  },
+  "location_status_share_by_year": {
+   "2015": {
+    "ok": 0.6517,
+    "out_of_area": 0.0003,
+    "redacted": 0.1388,
+    "unknown": 0.2093
+   },
+   "2016": {
+    "ok": 0.6479,
+    "out_of_area": 0.0002,
+    "redacted": 0.1478,
+    "unknown": 0.2041
+   },
+   "2017": {
+    "ok": 0.8237,
+    "out_of_area": 0.0003,
+    "redacted": 0.1657,
+    "unknown": 0.0103
+   },
+   "2018": {
+    "ok": 0.821,
+    "out_of_area": 0.0002,
+    "redacted": 0.1682,
+    "unknown": 0.0106
+   },
+   "2019": {
+    "ok": 0.8258,
+    "out_of_area": 0.0007,
+    "redacted": 0.1643,
+    "unknown": 0.0092
+   },
+   "2020": {
+    "ok": 0.8683,
+    "out_of_area": 0.0,
+    "redacted": 0.1267,
+    "unknown": 0.005
+   },
+   "2021": {
+    "ok": 0.8574,
+    "out_of_area": 0.0,
+    "redacted": 0.1371,
+    "unknown": 0.0055
+   },
+   "2022": {
+    "ok": 0.8644,
+    "out_of_area": 0.0002,
+    "redacted": 0.1324,
+    "unknown": 0.003
+   },
+   "2023": {
+    "ok": 0.854,
+    "out_of_area": 0.0,
+    "redacted": 0.1432,
+    "unknown": 0.0028
+   },
+   "2024": {
+    "ok": 0.8591,
+    "out_of_area": 0.0001,
+    "redacted": 0.1369,
+    "unknown": 0.004
+   },
+   "2025": {
+    "ok": 0.8374,
+    "out_of_area": 0.0,
+    "redacted": 0.1586,
+    "unknown": 0.004
+   },
+   "2026": {
+    "ok": 0.8132,
+    "out_of_area": 0.0,
+    "redacted": 0.1675,
+    "unknown": 0.0193
+   }
+  },
+  "location_status_share_by_category": {
+   "ALL OTHER": {
+    "ok": 0.6517,
+    "out_of_area": 0.0001,
+    "redacted": 0.2559,
+    "unknown": 0.0923
+   },
+   "PROPERTY CRIME": {
+    "ok": 0.8497,
+    "out_of_area": 0.0003,
+    "redacted": 0.0129,
+    "unknown": 0.137
+   },
+   "VIOLENT CRIME": {
+    "ok": 0.6843,
+    "out_of_area": 0.0,
+    "redacted": 0.2662,
+    "unknown": 0.0495
+   }
+  },
+  "distinct_coordinates": 42056,
+  "records_per_distinct_coordinate_median": 6.0,
+  "records_per_distinct_coordinate_p99": 366.0,
+  "coordinate_precision_note": "SPD blurs offense locations to the hundred block (block_address e.g. '24XX BLOCK OF 4TH AVE S'); coordinates are block centroids, so positional uncertainty is roughly +/-50-150 m along the street. Some incidents with unknown location are coded as (-1, -1) and others as REDACTED (sensitive offense types).",
+  "daily_gaps_report_time_since_2019_06": {
+   "periods": 2693,
+   "empty_periods": 0,
+   "longest_empty_runs": [],
+   "anomalously_low_periods(<30% of 28-period median)": [
+    "2020-06-06",
+    "2020-06-07",
+    "2020-06-08",
+    "2020-06-09",
+    "2020-06-14",
+    "2022-12-23"
+   ],
+   "n_anomalously_low": 6
+  },
+  "reconciliation_log": [
+   {
+    "snapshot_id": "20261014T185811Z",
+    "new": 1568048,
+    "changed": 0,
+    "removed": 0,
+    "initial_backfill": true
+   }
+  ],
+  "publication_completeness": {
+   "method": "Estimate how complete recent report-days are in a single snapshot by     comparing each recent day's count with the same weekday's mean over weeks     5-12 before the snapshot (assumed mature). Single-snapshot estimate; the     prospective engine measures true publication delays across snapshots.",
+   "by_age_band_ratio": {
+    "0-1d": 0.005,
+    "1-3d": 1.021,
+    "3-7d": 1.18,
+    "7-14d": 0.97,
+    "14-21d": 1.508,
+    "21-35d": 1.235
+   },
+   "daily": [
+    {
+     "age_days": 0,
+     "date": "2026-10-14",
+     "reports": 1,
+     "expected": 183.0,
+     "ratio": 0.005
+    },
+    {
+     "age_days": 1,
+     "date": "2026-10-13",
+     "reports": 70,
+     "expected": 156.6,
+     "ratio": 0.447
+    },
+    {
+     "age_days": 2,
+     "date": "2026-10-12",
+     "reports": 338,
+     "expected": 242.9,
+     "ratio": 1.392
+    },
+    {
+     "age_days": 3,
+     "date": "2026-10-11",
+     "reports": 160,
+     "expected": 148.3,
+     "ratio": 1.079
+    },
+    {
+     "age_days": 4,
+     "date": "2026-10-10",
+     "reports": 97,
+     "expected": 131.4,
+     "ratio": 0.738
+    },
+    {
+     "age_days": 5,
+     "date": "2026-10-09",
+     "reports": 202,
+     "expected": 131.3,
+     "ratio": 1.539
+    },
+    {
+     "age_days": 6,
+     "date": "2026-10-08",
+     "reports": 217,
+     "expected": 162.0,
+     "ratio": 1.34
+    },
+    {
+     "age_days": 7,
+     "date": "2026-10-07",
+     "reports": 121,
+     "expected": 183.0,
+     "ratio": 0.661
+    },
+    {
+     "age_days": 8,
+     "date": "2026-10-06",
+     "reports": 245,
+     "expected": 156.6,
+     "ratio": 1.565
+    },
+    {
+     "age_days": 9,
+     "date": "2026-10-05",
+     "reports": 151,
+     "expected": 242.9,
+     "ratio": 0.622
+    },
+    {
+     "age_days": 10,
+     "date": "2026-10-04",
+     "reports": 103,
+     "expected": 148.3,
+     "ratio": 0.695
+    },
+    {
+     "age_days": 11,
+     "date": "2026-10-03",
+     "reports": 101,
+     "expected": 131.4,
+     "ratio": 0.768
+    },
+    {
+     "age_days": 12,
+     "date": "2026-10-02",
+     "reports": 173,
+     "expected": 131.3,
+     "ratio": 1.318
+    },
+    {
+     "age_days": 13,
+     "date": "2026-10-01",
+     "reports": 227,
+     "expected": 162.0,
+     "ratio": 1.401
+    },
+    {
+     "age_days": 14,
+     "date": "2026-09-30",
+     "reports": 356,
+     "expected": 183.0,
+     "ratio": 1.945
+    },
+    {
+     "age_days": 15,
+     "date": "2026-09-29",
+     "reports": 253,
+     "expected": 156.6,
+     "ratio": 1.616
+    },
+    {
+     "age_days": 16,
+     "date": "2026-09-28",
+     "reports": 259,
+     "expected": 242.9,
+     "ratio": 1.066
+    },
+    {
+     "age_days": 17,
+     "date": "2026-09-27",
+     "reports": 187,
+     "expected": 148.3,
+     "ratio": 1.261
+    },
+    {
+     "age_days": 18,
+     "date": "2026-09-26",
+     "reports": 290,
+     "expected": 131.4,
+     "ratio": 2.207
+    },
+    {
+     "age_days": 19,
+     "date": "2026-09-25",
+     "reports": 227,
+     "expected": 131.3,
+     "ratio": 1.729
+    },
+    {
+     "age_days": 20,
+     "date": "2026-09-24",
+     "reports": 171,
+     "expected": 162.0,
+     "ratio": 1.056
+    },
+    {
+     "age_days": 21,
+     "date": "2026-09-23",
+     "reports": 176,
+     "expected": 183.0,
+     "ratio": 0.962
+    },
+    {
+     "age_days": 22,
+     "date": "2026-09-22",
+     "reports": 343,
+     "expected": 156.6,
+     "ratio": 2.191
+    },
+    {
+     "age_days": 23,
+     "date": "2026-09-21",
+     "reports": 416,
+     "expected": 242.9,
+     "ratio": 1.713
+    },
+    {
+     "age_days": 24,
+     "date": "2026-09-20",
+     "reports": 127,
+     "expected": 148.3,
+     "ratio": 0.856
+    },
+    {
+     "age_days": 25,
+     "date": "2026-09-19",
+     "reports": 103,
+     "expected": 131.4,
+     "ratio": 0.784
+    },
+    {
+     "age_days": 26,
+     "date": "2026-09-18",
+     "reports": 143,
+     "expected": 131.3,
+     "ratio": 1.089
+    },
+    {
+     "age_days": 27,
+     "date": "2026-09-17",
+     "reports": 175,
+     "expected": 162.0,
+     "ratio": 1.08
+    },
+    {
+     "age_days": 28,
+     "date": "2026-09-16",
+     "reports": 96,
+     "expected": 183.0,
+     "ratio": 0.525
+    },
+    {
+     "age_days": 29,
+     "date": "2026-09-15",
+     "reports": 128,
+     "expected": 156.6,
+     "ratio": 0.818
+    },
+    {
+     "age_days": 30,
+     "date": "2026-09-14",
+     "reports": 301,
+     "expected": 242.9,
+     "ratio": 1.239
+    },
+    {
+     "age_days": 31,
+     "date": "2026-09-13",
+     "reports": 206,
+     "expected": 148.3,
+     "ratio": 1.389
+    },
+    {
+     "age_days": 32,
+     "date": "2026-09-12",
+     "reports": 200,
+     "expected": 131.4,
+     "ratio": 1.522
+    },
+    {
+     "age_days": 33,
+     "date": "2026-09-11",
+     "reports": 237,
+     "expected": 131.3,
+     "ratio": 1.805
+    },
+    {
+     "age_days": 34,
+     "date": "2026-09-10",
+     "reports": 202,
+     "expected": 162.0,
+     "ratio": 1.247
+    }
+   ]
+  }
+ },
+ "spd_calls": {
+  "rows": 2471750,
+  "columns": {
+   "event_id": "string",
+   "ts_utc": "datetime64[us, UTC]",
+   "priority": "Int8",
+   "event_group": "string",
+   "final_call_type": "string",
+   "initial_call_type": "string",
+   "call_type": "string",
+   "call_type_indicator": "string",
+   "lat": "float64",
+   "lon": "float64",
+   "beat": "string",
+   "available_at_utc": "datetime64[us, UTC]"
+  },
+  "snapshot_id": "20261014T185908Z",
+  "fetched_at_utc": "2026-10-14T18:59:08.575620+00:00",
+  "raw_rows": 4350038,
+  "publisher_rows_updated_at": "2026-10-13T17:19:34+00:00",
+  "time_range_utc": [
+   "2019-06-01 07:00:06+00:00",
+   "2026-10-11 06:57:38+00:00"
+  ],
+  "latest_record_age_hours_at_fetch": 84.03,
+  "daily_gaps": {
+   "periods": 2689,
+   "empty_periods": 0,
+   "longest_empty_runs": [],
+   "anomalously_low_periods(<30% of 28-period median)": [],
+   "n_anomalously_low": 0
+  },
+  "duplicate_keys": 0,
+  "located_share": 0.7541401840801052,
+  "null_share": {
+   "event_id": 0.0,
+   "ts_utc": 0.0,
+   "priority": 0.0003,
+   "event_group": 0.0,
+   "final_call_type": 0.0,
+   "initial_call_type": 0.0,
+   "call_type": 0.0,
+   "call_type_indicator": 0.0,
+   "lat": 0.2459,
+   "lon": 0.2459,
+   "beat": 0.0,
+   "available_at_utc": 0.0
+  }
+ },
+ "fire_911": {
+  "rows": 844581,
+  "columns": {
+   "incident_number": "string",
+   "ts_utc": "datetime64[us, UTC]",
+   "type": "string",
+   "lat": "float64",
+   "lon": "float64",
+   "kind": "str"
+  },
+  "snapshot_id": "20261014T185811Z",
+  "fetched_at_utc": "2026-10-14T18:58:11.284283+00:00",
+  "raw_rows": 844581,
+  "publisher_rows_updated_at": "2026-10-14T18:55:50+00:00",
+  "time_range_utc": [
+   "2019-06-01 07:01:00+00:00",
+   "2026-10-14 18:48:00+00:00"
+  ],
+  "latest_record_age_hours_at_fetch": 0.17,
+  "daily_gaps": {
+   "periods": 2693,
+   "empty_periods": 0,
+   "longest_empty_runs": [],
+   "anomalously_low_periods(<30% of 28-period median)": [
+    "2024-09-19"
+   ],
+   "n_anomalously_low": 1
+  },
+  "located_share": 0.9972412355949282,
+  "null_share": {
+   "incident_number": 0.0,
+   "ts_utc": 0.0,
+   "type": 0.0,
+   "lat": 0.0028,
+   "lon": 0.0028,
+   "kind": 0.0
+  }
+ },
+ "context": {
+  "weather_hourly": {
+   "rows": 54704,
+   "range": [
+    "2019-06-01 00:00:00+00:00",
+    "2025-08-27 07:00:00+00:00"
+   ],
+   "missing_hours": 0,
+   "null_share": {
+    "ts_utc": 0.0,
+    "temp_c": 0.0001,
+    "dewpoint_c": 0.0001,
+    "rel_humidity": 0.0001,
+    "wind_ms": 0.0001,
+    "precip_mm": 0.0052,
+    "source": 0.0001,
+    "temp_source_station": 0.0001,
+    "precip_source_station": 0.0052
+   }
+  },
+  "events": {
+   "rows": 3209,
+   "by_category": {
+    "permit": 1733,
+    "mlb": 604,
+    "nhl": 270,
+    "mls": 160,
+    "wnba": 124,
+    "holiday": 101,
+    "nfl": 83,
+    "nwsl": 69,
+    "ncaaf": 53,
+    "soccer_intl": 12
+   },
+   "range": [
+    "2019-01-01 08:00:00+00:00",
+    "2027-12-25 08:00:00+00:00"
+   ]
+  },
+  "transit_stops": {
+   "rows": 3078
+  },
+  "transit_stop_how": {
+   "rows": 407952
+  },
+  "census_tracts": {
+   "rows": 177
+  },
+  "zoning": {
+   "rows": 3627
+  },
+  "streets": {
+   "rows": 23888
+  },
+  "city_limits": {
+   "rows": 1
+  },
+  "spd_beats": {
+   "rows": 55
+  },
+  "weather_forecast_hourly": {
+   "rows": 570185
+  }
+ }
+}

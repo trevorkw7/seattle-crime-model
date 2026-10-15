@@ -1,0 +1,23 @@
+# Reproducible GPU training job for the neural research models.
+# Launch:  python scripts/train_deep.py --job configs/gpu/deep_property.yaml
+# The same job runs on CPU (slowly); on GPU set `device: cuda`.
+job: deep_property
+category: property
+event_time: report
+horizons: [6, 24]
+archs: [tcn, convlstm, stgnn, transformer, hawkes]
+compare_with: [seasonal, lgbm]      # re-scored on the identical test windows
+device: cuda                        # cuda | cpu | null (auto)
+n_train_issue_times: 6000
+n_val_issue_times: 1000
+test_stride_h: 1
+deep:
+  epochs: 40
+  samples_per_epoch: 4096
+  batch_size: 32
+  lr: 0.002
+  weight_decay: 0.0001
+  patience: 5
+  hist_days: 56
+  max_tokens: 1024
+seed: 0

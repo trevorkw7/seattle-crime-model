@@ -1,0 +1,22 @@
+# CPU-feasible deep-model comparison actually executed in the development
+# container (4 vCPU, no GPU). Same code path as deep_property.yaml, smaller
+# budget: fewer training samples/epochs and a 3-hour test stride.
+job: deep_cpu
+category: property
+event_time: report
+horizons: [6, 24]
+archs: [tcn, convlstm, stgnn, transformer, hawkes]
+compare_with: [seasonal, lgbm, lgbm_resid]
+device: cpu
+n_train_issue_times: 2000
+n_val_issue_times: 400
+test_stride_h: 3
+deep:
+  epochs: 8
+  samples_per_epoch: 512
+  batch_size: 16
+  lr: 0.002
+  patience: 2
+  hist_days: 28
+  max_tokens: 384
+seed: 0
