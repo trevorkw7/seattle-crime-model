@@ -134,14 +134,20 @@ class Exporter:
         return self.grid.to_geojson(self.active.ravel(), props)
 
     # ------------------------------------------------------------ forecasts
-    def forecasts(self, max_items: int = 400) -> dict:
+    def forecasts(self, max_live: int = 400, max_replay: int = 400) -> dict:
         fc = self.store.list_forecasts()
         scores = self.store.latest_scores()
         items, latest = [], {}
         if fc.empty:
             return {"provenance": _prov("actual", "No forecasts frozen yet"), "latest": {}, "items": []}
         fc = fc.sort_values("t0")
-        keep = pd.concat([fc[fc["provenance"] == "actual"].tail(max_items), fc[fc["provenance"] != "actual"].tail(max_items)])
+        keep = pd.concat([fc[fc["provenance"] == "actual"].tail(max_live), fc[fc["provenance"] != "actual"].tail(max_replay)])
+        # drop documents of forecasts no longer exported so a snapshot holds only what the index lists
+        fdir = self.out / "forecasts"
+        if fdir.exists():
+            for f in fdir.glob("*.json"):
+                if f.name != "index.json" and f.stem not in set(keep["forecast_id"]):
+                    f.unlink()
         data_end = None
         try:
             data_end = pd.Timestamp(Cube.load(cube_dir(self.cfg), "property_report", mmap=True).meta.get("data_end"))
@@ -454,14 +460,16 @@ def latest_backtests(cfg: Config) -> dict:
     return out
 
 
-def export_all(cfg: Config, out: Path | None = None) -> Path:
+def export_all(cfg: Config, out: Path | None = None, max_live: int = 400, max_replay: int = 400) -> Path:
+    """Write every dashboard document. ``max_live`` / ``max_replay`` keep only the
+    most recent forecasts of each kind (used for the committed site snapshot)."""
     out = out or Path(os.environ.get("SEACRIME_EXPORT_DIR", REPO_ROOT / "web" / "public" / "data"))
     out.mkdir(parents=True, exist_ok=True)
     ex = Exporter(cfg, out)
     bts = latest_backtests(cfg)
     _write(out / "meta.json", ex.meta(bts))
     _write(out / "grid.geojson", ex.grid_geojson())
-    _write(out / "forecasts" / "index.json", ex.forecasts())
+    _write(out / "forecasts" / "index.json", ex.forecasts(max_live=max_live, max_replay=max_replay))
     ex.history()
     _write(out / "evaluation" / "summary.json", ex.evaluation(bts))
     _write(out / "health.json", ex.health())
@@ -472,9 +480,11 @@ def export_all(cfg: Config, out: Path | None = None) -> Path:
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out")
+    ap.add_argument("--max-live", type=int, default=400, help="most recent live forecasts to export")
+    ap.add_argument("--max-replay", type=int, default=400, help="most recent historical-replay forecasts to export")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO)
-    export_all(load_config(), Path(args.out) if args.out else None)
+    export_all(load_config(), Path(args.out) if args.out else None, max_live=args.max_live, max_replay=args.max_replay)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 # data & artifacts (reproducible via scripts; never committed)
 data/
+# ...except the committed dashboard data snapshot served by the static site (Vercel)
+!web/public/data/
 artifacts/
 *.parquet
 *.pt
