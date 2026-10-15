@@ -103,8 +103,10 @@ runs the same code path on CPU in a few minutes.
 ## Deploying the dashboard to Vercel
 
 * **Git integration (recommended):** import this repository in Vercel with *Root Directory* `web`
-  (settings come from `web/vercel.json`). Every push redeploys. The site reads `web/public/data`;
-  without an exported data snapshot it shows clearly labelled demo data.
+  (settings come from `web/vercel.json`). Every push redeploys. The site serves the committed data
+  snapshot in `web/public/data` (real forecasts frozen on 2026-10-15, historical replays and backtest
+  results); it falls back to clearly labelled demo data only if that folder is missing. To refresh it,
+  run a cycle and `python -m seacrime.export --max-live 30 --max-replay 42`, then commit `web/public/data`.
 * **CLI from a machine with the data:** `python -m seacrime.export && web/scripts/deploy-vercel.sh --prod`
   (authenticates with `vercel login` or `VERCEL_TOKEN`), which uploads the static build with the current export.
 
