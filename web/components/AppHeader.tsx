@@ -5,9 +5,10 @@ import { usePathname } from 'next/navigation';
 import { useAbout, useTheme } from './Providers';
 import { BrandMark, InfoIcon, MoonIcon, SunIcon } from './Icons';
 
-const NAV = [
-  { href: '/', label: 'Map' },
-  { href: '/evaluation/', label: 'Evaluation' },
+const NAV: { href: string; label: string; short?: string }[] = [
+  { href: '/', label: 'Home' },
+  { href: '/explore/', label: 'Detailed map', short: 'Details' },
+  { href: '/evaluation/', label: 'Accuracy' },
   { href: '/status/', label: 'Status' },
 ];
 
@@ -19,11 +20,11 @@ export function AppHeader() {
 
   return (
     <header className="app-header">
-      <Link href="/" className="brand" aria-label="Seattle reported-crime forecast — map">
+      <Link href="/" className="brand" aria-label="Seattle Crime Forecast — home">
         <BrandMark />
         <span className="brand-text">
           <span className="brand-title">Seattle Crime Forecast</span>
-          <span className="brand-sub">Research preview · reported incidents</span>
+          <span className="brand-sub">Reported crime, forecast by area</span>
         </span>
       </Link>
       <nav className="nav" aria-label="Main">
@@ -31,7 +32,14 @@ export function AppHeader() {
           const active = n.href === '/' ? norm(pathname) === '/' : norm(pathname).startsWith(n.href);
           return (
             <Link key={n.href} href={n.href} aria-current={active ? 'page' : undefined}>
-              {n.label}
+              {n.short ? (
+                <>
+                  <span className="nav-full">{n.label}</span>
+                  <span className="nav-short">{n.short}</span>
+                </>
+              ) : (
+                n.label
+              )}
             </Link>
           );
         })}
@@ -42,10 +50,10 @@ export function AppHeader() {
           className="btn btn-ghost about-btn"
           onClick={() => setOpen(true)}
           aria-haspopup="dialog"
-          aria-label="About this map"
+          aria-label="About this project"
         >
           <InfoIcon size={16} />
-          <span className="about-btn-text">About this map</span>
+          <span className="about-btn-text">About</span>
         </button>
         <button
           type="button"

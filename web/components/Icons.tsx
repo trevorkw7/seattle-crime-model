@@ -28,6 +28,24 @@ export const InfoIcon = (p: P) => (
     <path d="M12 11v5M12 8h.01" />
   </Svg>
 );
+export const SearchIcon = (p: P) => (
+  <Svg {...p}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M20 20l-3.5-3.5" />
+  </Svg>
+);
+export const LocateIcon = (p: P) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="3.5" />
+    <circle cx="12" cy="12" r="8" />
+    <path d="M12 1.5V4M12 20v2.5M1.5 12H4M20 12h2.5" />
+  </Svg>
+);
+export const ArrowRight = (p: P) => (
+  <Svg {...p}>
+    <path d="M5 12h14M13 6l6 6-6 6" />
+  </Svg>
+);
 export const SunIcon = (p: P) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="4" />
