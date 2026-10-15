@@ -100,6 +100,14 @@ Deep models on a GPU: `python scripts/train_deep.py --job configs/gpu/deep_prope
 (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for costs). `configs/gpu/cpu_smoke.yaml`
 runs the same code path on CPU in a few minutes.
 
+## Deploying the dashboard to Vercel
+
+* **Git integration (recommended):** import this repository in Vercel with *Root Directory* `web`
+  (settings come from `web/vercel.json`). Every push redeploys. The site reads `web/public/data`;
+  without an exported data snapshot it shows clearly labelled demo data.
+* **CLI from a machine with the data:** `python -m seacrime.export && web/scripts/deploy-vercel.sh --prod`
+  (authenticates with `vercel login` or `VERCEL_TOKEN`), which uploads the static build with the current export.
+
 ## Forecast definition (short)
 
 For every hourly issue time *t*, horizon *h* and cell: expected number of SPD
