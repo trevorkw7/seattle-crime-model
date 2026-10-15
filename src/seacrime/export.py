@@ -9,6 +9,7 @@ import argparse
 import json
 import logging
 import os
+import re
 from pathlib import Path
 
 import numpy as np
@@ -413,8 +414,20 @@ class Exporter:
         if not jobs.empty:
             for name, g in jobs.groupby("job"):
                 last = g.sort_values("started_at").iloc[-1]
-                jl.append({"name": name, "last_run": _iso(last["started_at"]), "last_status": "ok" if last["status"] == "ok" else last["status"], "message": last["message"] or ""})
+                jl.append({"name": name, "last_run": _iso(last["started_at"]), "last_status": "ok" if last["status"] == "ok" else last["status"],
+                           "message": public_message(last["message"])})
         return {"provenance": _prov("actual", "Data freshness and model health"), "sources": sources, "models": models, "jobs": jl}
+
+
+_PATH_RE = re.compile(r"(?:[A-Za-z]:)?(?:/[\w.@~+-]+){2,}/?")
+
+
+def public_message(msg: str | None, limit: int = 300) -> str:
+    """Job messages are published in health.json: strip filesystem paths (and any
+    traceback detail they carry) and cap the length."""
+    if not msg:
+        return ""
+    return _PATH_RE.sub("<path>", str(msg))[:limit]
 
 
 def _family(m: str) -> str:

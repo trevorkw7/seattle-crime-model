@@ -122,7 +122,8 @@ def run_cycle(cfg: Config, ingest: bool = True, categories: list[str] | None = N
     def export():
         from ..export import export_all
 
-        return {"out": str(export_all(cfg))}
+        out = export_all(cfg)
+        return {"exported_files": sum(1 for f in out.rglob("*") if f.is_file())}
 
     step("export", export)
     return results

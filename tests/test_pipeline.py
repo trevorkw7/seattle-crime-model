@@ -142,3 +142,13 @@ def test_api_serves_contract_documents(tmp_path, monkeypatch):
     assert c.get("/data/health.json").status_code == 200
     assert c.get("/api/forecast", params={"horizon": 3}).status_code == 404
     np.testing.assert_equal(c.get("/data/../pyproject.toml").status_code in (404, 400), True)
+
+
+def test_public_job_messages_have_no_paths():
+    from seacrime.export import public_message
+
+    msg = '{"out": "/home/user/seattle-crime-model/web/public/data"} File "/usr/lib/python3/x.py", line 3'
+    out = public_message(msg)
+    assert "/home" not in out and "/usr" not in out and "<path>" in out
+    assert public_message(None) == ""
+    assert len(public_message("x" * 1000)) == 300
