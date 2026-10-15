@@ -460,18 +460,43 @@ def latest_backtests(cfg: Config) -> dict:
     return out
 
 
-def export_all(cfg: Config, out: Path | None = None, max_live: int = 400, max_replay: int = 400) -> Path:
+def _read_json(p: Path) -> dict | None:
+    try:
+        return json.loads(p.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def export_all(cfg: Config, out: Path | None = None, max_live: int = 400, max_replay: int = 400, static_base: Path | None = None) -> Path:
     """Write every dashboard document. ``max_live`` / ``max_replay`` keep only the
-    most recent forecasts of each kind (used for the committed site snapshot)."""
+    most recent forecasts of each kind (used for the committed site snapshot).
+
+    ``static_base`` is a previous export (e.g. the snapshot committed in
+    ``web/public/data``). When no backtest artifacts exist locally — as on the
+    scheduled live job, which never runs the multi-hour backtests — the backtest
+    sections of the evaluation summary and the backtest-only model list are
+    carried over from it, while forecasts, scores, history and health are fresh."""
     out = out or Path(os.environ.get("SEACRIME_EXPORT_DIR", REPO_ROOT / "web" / "public" / "data"))
+    bts = latest_backtests(cfg)
+    base_meta = base_eval = None
+    if not bts and static_base is not None:
+        base_meta = _read_json(static_base / "meta.json")
+        base_eval = _read_json(static_base / "evaluation" / "summary.json")
     out.mkdir(parents=True, exist_ok=True)
     ex = Exporter(cfg, out)
-    bts = latest_backtests(cfg)
-    _write(out / "meta.json", ex.meta(bts))
+    meta = ex.meta(bts)
+    if base_meta:
+        have = {m["id"] for m in meta["models"]}
+        meta["models"] += [m for m in base_meta.get("models", []) if m.get("backtest_only") and m["id"] not in have]
+    _write(out / "meta.json", meta)
     _write(out / "grid.geojson", ex.grid_geojson())
     _write(out / "forecasts" / "index.json", ex.forecasts(max_live=max_live, max_replay=max_replay))
     ex.history()
-    _write(out / "evaluation" / "summary.json", ex.evaluation(bts))
+    ev = ex.evaluation(bts)
+    if base_eval:
+        ev = {**base_eval, "prospective": ev["prospective"],
+              "provenance": _prov("actual", "Backtest metrics from the published research runs (identical held-out test windows); prospective metrics from live frozen forecasts.")}
+    _write(out / "evaluation" / "summary.json", ev)
     _write(out / "health.json", ex.health())
     log.info("exported dashboard data to %s", out)
     return out
@@ -482,9 +507,11 @@ def main(argv=None) -> None:
     ap.add_argument("--out")
     ap.add_argument("--max-live", type=int, default=400, help="most recent live forecasts to export")
     ap.add_argument("--max-replay", type=int, default=400, help="most recent historical-replay forecasts to export")
+    ap.add_argument("--static-base", help="previous export to take backtest results from when none exist locally")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO)
-    export_all(load_config(), Path(args.out) if args.out else None, max_live=args.max_live, max_replay=args.max_replay)
+    export_all(load_config(), Path(args.out) if args.out else None, max_live=args.max_live, max_replay=args.max_replay,
+               static_base=Path(args.static_base) if args.static_base else None)
 
 
 if __name__ == "__main__":

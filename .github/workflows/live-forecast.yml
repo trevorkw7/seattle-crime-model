@@ -1,0 +1,189 @@
+# Live forecasts on free GitHub infrastructure.
+#
+# Every hour this workflow pulls the newest public data, issues and freezes forecasts
+# with the production models, scores earlier forecasts against newly published
+# reports, and publishes the dashboard data to GitHub Pages. The Vercel site reads it
+# from https://<owner>.github.io/<repo>/data/ (web/lib/config.ts) and falls back to the
+# snapshot bundled in web/public/data when the feed is unavailable.
+#
+# Turn on:  Settings → Pages → Build and deployment → Source: "GitHub Actions".
+#           Until then every run stops after a few seconds.
+# Turn off: Actions → live-forecast → "Disable workflow".
+#
+# State between runs lives in the Actions cache (processed data, production models
+# and the frozen-forecast store; cubes are rebuilt each run). The store is also backed
+# up once a day as the release asset forecast-store/forecast-store.tar.gz, because
+# cache entries can be evicted. A run without cached state downloads every source
+# again and retrains the models (roughly an hour). Models are retrained weekly.
+# GitHub pauses scheduled workflows in repositories without activity for 60 days.
+name: live-forecast
+
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+    inputs:
+      retrain:
+        description: Retrain the production models before forecasting
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-forecast
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pages: read
+    outputs:
+      enabled: ${{ steps.pages.outputs.enabled }}
+    steps:
+      - name: Check that GitHub Pages publishes from Actions
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          build_type=$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq .build_type 2>/dev/null || true)
+          if [ "$build_type" = "workflow" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Live forecasts are off"
+              echo "Turn on GitHub Pages with **Source: GitHub Actions** (Settings → Pages) to publish hourly forecasts."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  cycle:
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    permissions:
+      contents: write # daily backup of the forecast store as a release asset
+    outputs:
+      exported: ${{ steps.export.outputs.exported }}
+    env:
+      PYTHONPATH: src
+      SOCRATA_APP_TOKEN: ${{ secrets.SOCRATA_APP_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -e .
+
+      - name: Restore state
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data
+            !data/processed/cubes_*
+            artifacts/models/production
+          key: live-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: live-state-
+
+      - name: Restore the forecast store from its backup if the cache was lost
+        run: |
+          if [ ! -f data/prospective/registry.sqlite ]; then
+            if gh release download forecast-store --pattern forecast-store.tar.gz --dir "$RUNNER_TEMP/store"; then
+              python scripts/live_state.py unpack-store "$RUNNER_TEMP/store/forecast-store.tar.gz"
+            else
+              echo "No backup yet; starting a new forecast store."
+            fi
+          fi
+
+      - name: Plan
+        id: plan
+        run: |
+          python scripts/live_state.py status --retrain-days 7
+          echo "hour=$(date -u +%H)" >> "$GITHUB_OUTPUT"
+
+      - name: Download every source (first run or lost cache)
+        if: steps.plan.outputs.bootstrap == 'true'
+        run: |
+          python -m seacrime.ingest.run spd_crime spd_calls fire_911 weather events gtfs boundaries
+          python -m seacrime.ingest.process
+
+      - name: Refresh event schedules (daily)
+        if: steps.plan.outputs.bootstrap != 'true' && steps.plan.outputs.hour == '13'
+        continue-on-error: true
+        run: python -m seacrime.ingest.run events
+
+      - name: Retrain production models (weekly)
+        if: steps.plan.outputs.retrain == 'true' || inputs.retrain == true
+        run: |
+          python -m seacrime.build
+          python -m seacrime.train
+
+      - name: Forecast cycle (ingest, build, freeze, score)
+        id: cycle
+        continue-on-error: true
+        run: python -m seacrime.prospective.cycle --models lgbm seasonal --no-export --fail-on build_cubes hourly_forecast
+
+      - name: Export dashboard data
+        id: export
+        run: |
+          python -m seacrime.export --out _site/data --max-live 150 --max-replay 0 --static-base web/public/data
+          cp infra/pages/index.html _site/index.html
+          echo "exported=true" >> "$GITHUB_OUTPUT"
+
+      - name: Prune raw snapshots
+        if: steps.export.outcome == 'success'
+        run: python scripts/live_state.py prune
+
+      - name: Save state
+        if: steps.export.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data
+            !data/processed/cubes_*
+            artifacts/models/production
+          key: live-state-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Back up the forecast store (daily)
+        if: steps.export.outcome == 'success' && (steps.plan.outputs.hour == '12' || steps.plan.outputs.has_store != 'true')
+        continue-on-error: true
+        run: |
+          python scripts/live_state.py pack-store "$RUNNER_TEMP/forecast-store.tar.gz"
+          if ! gh release view forecast-store > /dev/null 2>&1; then
+            gh release create forecast-store --prerelease --target "$GITHUB_SHA" --title "Forecast store backup" \
+              --notes "Daily backup of the frozen-forecast store written by the live-forecast workflow. Not a software release."
+          fi
+          gh release upload forecast-store "$RUNNER_TEMP/forecast-store.tar.gz" --clobber
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.export.outcome == 'success'
+        with:
+          path: _site
+
+      - name: Report a failed forecast cycle
+        if: steps.cycle.outcome == 'failure'
+        run: |
+          echo "The forecast step failed; the published data still shows the previous forecasts. See the 'Forecast cycle' step log."
+          exit 1
+
+  deploy:
+    needs: cycle
+    if: ${{ !cancelled() && needs.cycle.outputs.exported == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

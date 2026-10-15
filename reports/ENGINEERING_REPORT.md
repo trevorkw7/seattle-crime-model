@@ -21,13 +21,15 @@ tables, [runs/](runs/) for the raw run reports, and
 | Neural research models: TCN, ConvLSTM, ST-GNN, event-sequence transformer, neural Hawkes | ✅ implemented; reduced-scale CPU comparison (§3.6) | `models/deep/`, `configs/gpu/`, `docs/GPU_RESEARCH.md` |
 | Prospective engine: forecasts frozen before their window (read-only file + SHA-256), model version, data snapshot ids and per-source feature cutoffs stored, maturity-aware re-scoring per snapshot, replay | ✅ | `prospective/`, `tests/test_end_to_end.py` |
 | Hourly cycle (incremental Fire 911, publisher-aware SPD refresh, MOS refresh, cubes, forecasts, scoring, export) with job log and health | ✅ executed locally (`20261014T213316Z`) | `prospective/cycle.py` |
-| Dashboard: heat map, horizon/category/model/metric selectors, legend + P(≥1), suppressed historical overlay, replay timeline, evaluation, status; demo / actual / provisional / replay labelling; mobile layout | ✅ built and screenshotted with real data | `web/`, `web/screenshots/real/` |
+| Dashboard: plain-language home page (crime type, time window, neighborhood / address / my-location search, everyday wording: "about 1 in 4 chance", "about usual for a Wednesday evening"); detailed map with heat map, horizon/category/model/metric selectors, legend + P(≥1), suppressed historical overlay, replay timeline; evaluation; status; demo / actual / provisional / replay labelling; mobile layout | ✅ built and screenshotted with real data | `web/`, `web/screenshots/real/` |
 | Read-only API + static hosting of the dashboard | ✅ | `src/seacrime/api/app.py` |
+| Dashboard hosting | ✅ deployed by the owner on Vercel (Git integration) | `web/vercel.json` |
+| Hourly live forecasts on GitHub Actions, published to GitHub Pages; site prefers the live feed and refreshes open pages | ✅ written, `actionlint` clean, cycle/export steps dry-run locally; starts once Pages is enabled | `.github/workflows/live-forecast.yml`, `scripts/live_state.py` |
 | CI workflow, Dockerfile, docker-compose scheduler, Terraform (GCP; `terraform validate` passes), cost estimate | ✅ written, not deployed | `.github/workflows/`, `infra/`, `docs/DEPLOYMENT.md` |
 
 ## 2. What was tested
 
-* `pytest`: 64 tests pass (unit, leakage, chronology, DST, metrics, NB
+* `pytest`: 67 tests pass (unit, leakage, chronology, DST, metrics, NB
   dispersion/intervals, model fitting, reconciliation, frozen-store tamper detection,
   maturity labelling, weather-forecast availability, event schedule/attendance
   leakage, API, context-ingestion parsers, and an end-to-end synthetic lifecycle:
@@ -36,7 +38,8 @@ tables, [runs/](runs/) for the raw run reports, and
   calls 96 h, fire 1 h, weather issue time, schedule publication) and assert that
   no feature changes.
 * `ruff` lint clean; `terraform validate` clean; `npm run build` + Playwright smoke
-  test (11 checks, written by the dashboard build) and real-data screenshots.
+  test (13 checks, including the plain-language home page: neighborhood search, crime type and
+  time switches, tapping a square) and real-data screenshots.
 * Bugs found and fixed by these checks: a forecast-metadata/horizon mismatch
   (end-to-end test), post-event sports attendance used as a feature (review of the
   events table), GLM transform decided per batch, memory blow-up (OOM) in the GLM
@@ -166,8 +169,7 @@ slightly from §3.1); the full GPU configuration is in `configs/gpu/deep_propert
 
 | Item | Blocker | What is needed |
 |---|---|---|
-| Pull request | The GitHub repository has no base branch (the work branch is its only branch); creating a `main` branch was denied by this session's permission policy | Repository owner creates a base branch (e.g. an empty `main`) or authorizes it; then the PR can be opened from `claude/magical-darwin-8sbpll` |
-| Cloud deployment (scheduled cycle, persistent storage, public dashboard) | No authorization to provision paid resources or expose services | Approve a GCP project + budget (≈$16–25/month, docs/DEPLOYMENT.md) or a small VM; `terraform apply` |
+| Hourly live forecasts | The workflow runs from `main` and publishes to GitHub Pages | Merge the PR, then Settings → Pages → Source: GitHub Actions (free); the first run takes about an hour |
 | Live prospective scores | Time: SPD data for the frozen windows is not yet published | Keep the hourly cycle running ≥ 1 day (provisional) / 30 days (mature) |
 | Full-scale neural experiments | No GPU in the environment | Run `scripts/train_deep.py --job configs/gpu/deep_property.yaml` on a GPU (≈1–3 GPU-hours) |
 | Concert/arena events, ticketing | Ticketmaster (HTTP 401) and SeatGeek (403) need API keys; Eventbrite endpoint gone | API keys |
@@ -184,8 +186,8 @@ slightly from §3.1); the full GPU configuration is in `configs/gpu/deep_propert
    (already scheduled) plus an online recalibration of the citywide level from the
    most recent mature weeks — and evaluating forecasts against that — should improve
    deviance and P(≥1) more than any architecture change seen so far.
-2. **Run the prospective loop for real.** Deploy the hourly cycle (or the GitHub
-   Actions schedule) so live forecasts accumulate provisional and mature scores; this
+2. **Run the prospective loop for real.** Turn on the hourly GitHub Actions
+   workflow so live forecasts accumulate provisional and mature scores; this
    also measures the true publication-delay curve from successive snapshots instead of
    the single-snapshot estimate, which in turn sets the feature lag and maturity window
    from data.

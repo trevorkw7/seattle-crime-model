@@ -1,7 +1,9 @@
 # Dashboard data contract (v1)
 
 The dashboard is a static-exportable Next.js app. It reads JSON documents from a
-base URL (`NEXT_PUBLIC_DATA_BASE`, default `/data`). The same documents are written
+base URL (`NEXT_PUBLIC_DATA_BASE`, default `/data`) and, when it is newer, from the
+hourly live feed (`NEXT_PUBLIC_LIVE_DATA_BASE`, default the repository's GitHub Pages
+site; empty disables it). The same documents are written
 to `web/public/data/` by `python -m seacrime.export` and are also served by the
 FastAPI app (`seacrime.api`) under `/data/...`. All timestamps are ISO‑8601 UTC
 (`...Z`). Cell ids are strings `"r{row}_c{col}"`.

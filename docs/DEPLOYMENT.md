@@ -1,8 +1,33 @@
 # Deployment
 
-Nothing has been deployed to any paid or public service. The repository contains
-deployable configurations; the platform currently runs locally (data pipeline,
-scheduled cycle, API and dashboard).
+The dashboard is deployed by the repository owner on Vercel (Git integration,
+Root Directory `web`). Hourly live forecasts run on GitHub Actions and are
+published to GitHub Pages once Pages is enabled (below); both are free for a
+public repository. No paid cloud resources have been provisioned; the Terraform
+configuration below is an alternative that has not been applied.
+
+## Live forecasts on GitHub Actions + Pages (free)
+
+`.github/workflows/live-forecast.yml`, every hour at :23:
+
+1. **gate** — checks that GitHub Pages publishes from Actions; otherwise ends.
+2. **cycle** — restores state from the Actions cache (processed data, production
+   models, frozen-forecast store; the store falls back to its daily release-asset
+   backup), downloads every source on a first run, retrains weekly, then runs
+   `python -m seacrime.prospective.cycle --models lgbm seasonal --no-export`
+   and exports with `python -m seacrime.export --out _site/data --max-live 150
+   --max-replay 0 --static-base web/public/data` (backtest results are carried over
+   from the committed snapshot because the multi-hour backtests do not run here).
+   Older raw snapshots are pruned before the cache is saved.
+3. **deploy** — publishes `_site` to GitHub Pages.
+
+A failed data source is recorded in `health.json` (Status page) without failing
+the run; the run fails (and GitHub notifies the owner) only when cubes or
+forecasts could not be produced, and the previous forecasts stay published.
+
+Runner time: about 10 minutes per hourly run once state is cached (the daily SPD
+refresh adds a few minutes); the first run takes about an hour. Public
+repositories do not pay for GitHub-hosted runner minutes.
 
 ## Local (verified)
 
@@ -54,10 +79,10 @@ steps; Cloud Run Jobs retry once; the alert policy notifies on errors.
 | Scheduler, Artifact Registry, logging | 2 scheduler jobs, < 1 GB images | 0–1 |
 | **Total** | | **≈ $16–25** |
 
-Cheaper alternatives: a single small VM running `docker compose` (2–4 vCPU,
-8 GB, e.g. ~$7–30/month depending on provider), or the provided GitHub Actions
-workflow `forecast-cycle.yml` (free minutes on public repositories; disabled
-until `SEACRIME_ENABLE_SCHEDULE=true`) with state in a GCS bucket.
+Cheaper alternatives: the free GitHub Actions + Pages workflow above, or a single
+small VM running `docker compose` (2–4 vCPU, 8 GB, e.g. ~$7–30/month depending on
+provider). `scripts/state_sync.py` syncs state with a GCS bucket for the Cloud Run
+or VM setups.
 
 GPU research runs (`scripts/train_deep.py`): an on-demand NVIDIA L4/T4 instance at
 roughly $0.35–1.00 per hour (spot ~60–70 % cheaper); `configs/gpu/deep_property.yaml`

@@ -134,6 +134,11 @@ class ForecastStore:
                 (forecast_id, horizon, now_iso(), snapshot_id, maturity, json.dumps(metrics)),
             )
 
+    def scored_against(self, snapshot_id: str) -> set[tuple[str, int]]:
+        """(forecast_id, horizon_h) pairs that already have a score for this snapshot."""
+        with self.conn() as c:
+            return {(r[0], int(r[1])) for r in c.execute("SELECT forecast_id, horizon_h FROM scores WHERE snapshot_id = ?", (snapshot_id,))}
+
     def scores(self) -> pd.DataFrame:
         with self.conn() as c:
             rows = [dict(r) for r in c.execute("SELECT * FROM scores")]

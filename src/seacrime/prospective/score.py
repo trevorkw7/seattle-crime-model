@@ -48,6 +48,8 @@ def score_all(cfg: Config, now: pd.Timestamp | None = None) -> int:
     final = set()
     if not latest.empty:
         final = set(zip(latest.loc[latest["maturity"] == "mature", "forecast_id"], latest.loc[latest["maturity"] == "mature", "horizon_h"], strict=True))
+    # windows already scored against this snapshot (cycles run hourly; SPD publishes daily)
+    done = store.scored_against(snapshot_id)
     inc_cache: dict[str, pd.DataFrame] = {}
     n = 0
     for _, f in fc.iterrows():
@@ -59,8 +61,8 @@ def score_all(cfg: Config, now: pd.Timestamp | None = None) -> int:
         preds = None
         for h in json.loads(f["horizons"]):
             end = t0 + pd.Timedelta(hours=h)
-            if end > snapshot_time or (f["forecast_id"], h) in final:
-                continue  # window not over (in published data) or already final
+            if end > snapshot_time or (f["forecast_id"], h) in final or (f["forecast_id"], h) in done:
+                continue  # window not over (in published data), already final, or unchanged since last scored
             if preds is None:
                 preds = store.load_predictions(f["forecast_id"])  # verifies SHA-256
             p = preds[preds["horizon_h"] == h]

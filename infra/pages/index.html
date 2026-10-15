@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seattle Crime Forecast data</title>
+<style>
+  :root { color-scheme: light dark; --bg: #fcfcfb; --ink: #111110; --muted: #5f5e58; --link: #1c5cab; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #141413; --ink: #f0efec; --muted: #a3a29b; --link: #86b6ef; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 48px 16px; }
+  h1 { font-size: 24px; margin: 0 0 12px; }
+  p, li { color: var(--muted); }
+  a { color: var(--link); }
+  code { font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Seattle Crime Forecast — live data</h1>
+  <p>This address hosts the data behind the Seattle Crime Forecast dashboard: area-level (500 m) forecasts of
+    crimes reported to the Seattle Police Department, refreshed every hour by a scheduled GitHub Actions job.
+    It is a research and public-understanding project, not a tool for policing or for judging individuals.</p>
+  <ul>
+    <li><a href="data/meta.json"><code>data/meta.json</code></a> — models, categories and grid</li>
+    <li><a href="data/forecasts/index.json"><code>data/forecasts/index.json</code></a> — frozen forecasts</li>
+    <li><a href="data/health.json"><code>data/health.json</code></a> — data freshness and job status</li>
+  </ul>
+  <p>The document formats are described in <code>docs/API_CONTRACT.md</code> in the <a href="https://github.com/trevorkw7/seattle-crime-model">source repository</a>.</p>
+</main>
+</body>
+</html>
