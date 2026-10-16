@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, Map as MLMap, MapLayerMouseEvent, StyleSpecification } from 'maplibre-gl';
 import { BASEMAP_STYLES, MAPLIBRE_WORKER_URL } from '@/lib/config';
@@ -37,6 +37,16 @@ export interface MapViewProps {
   compactControls: boolean;
   dim: boolean;
   onBasemapStatus?: (status: 'ok' | 'fallback' | 'degraded') => void;
+  /** when set, clicks report the cell (or null outside the grid) instead of opening popups */
+  onCellClick?: (cellId: string | null, lngLat: [number, number]) => void;
+  /** cells drawn with a selection outline */
+  selected?: string[];
+  /** fit the view to these cells whenever the nonce changes */
+  fitTo?: { ids: string[]; nonce: number } | null;
+  /** a location pin (e.g. the viewer's position or a searched address) */
+  marker?: [number, number] | null;
+  /** two-finger panning on touch screens so the page around the map can scroll */
+  cooperative?: boolean;
 }
 
 type Centroids = Map<string, [number, number]>;
@@ -134,6 +144,9 @@ export default function MapView(props: MapViewProps) {
   const centroids = useMemo(() => centroidsOf(props.grid), [props.grid]);
   const centroidsRef = useRef(centroids);
   centroidsRef.current = centroids;
+  const selectedRef = useRef<string[]>([]);
+  const markerRef = useRef<maplibregl.Marker | null>(null);
+  const [ready, setReady] = useState(false);
 
   // ---- data builders -------------------------------------------------------
   const buildCells = () => {
@@ -271,13 +284,43 @@ export default function MapView(props: MapViewProps) {
         source: 'cells',
         paint: {
           'line-color': ink.ink,
-          'line-width': ['case', ['boolean', ['feature-state', 'pinned'], false], 2.6, ['boolean', ['feature-state', 'hover'], false], 2, 0],
+          'line-width': [
+            'case',
+            ['boolean', ['feature-state', 'pinned'], false],
+            2.6,
+            ['boolean', ['feature-state', 'hover'], false],
+            2,
+            0,
+          ],
+        },
+      },
+      before,
+    );
+    map.addLayer(
+      {
+        id: 'cells-sel',
+        type: 'line',
+        source: 'cells',
+        paint: {
+          'line-color': ink.observed,
+          // zoom must be the outermost input, so the selection test sits inside each stop
+          'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            10,
+            ['case', ['boolean', ['feature-state', 'sel'], false], 1.5, 0],
+            13,
+            ['case', ['boolean', ['feature-state', 'sel'], false], 3, 0],
+          ],
         },
       },
       before,
     );
     if (pinnedRef.current) map.setFeatureState({ source: 'cells', id: pinnedRef.current }, { pinned: true });
+    for (const id of selectedRef.current) map.setFeatureState({ source: 'cells', id }, { sel: true });
     containerRef.current?.setAttribute('data-grid-ready', 'true');
+    setReady(true);
   };
 
   // ---- popups --------------------------------------------------------------
@@ -353,7 +396,7 @@ export default function MapView(props: MapViewProps) {
         touchPitch: false,
         maxZoom: 16.5,
         minZoom: 8.5,
-        cooperativeGestures: false,
+        cooperativeGestures: !!p.cooperative,
       });
       map = mapInst;
       const mp = mapInst;
@@ -382,6 +425,8 @@ export default function MapView(props: MapViewProps) {
           console.warn('[map] basemap resource failed to load:', (e.error as Error | undefined)?.message ?? e);
         }
       });
+      // exposed for tests and debugging
+      mp.on('moveend', () => containerRef.current?.setAttribute('data-zoom', mp.getZoom().toFixed(2)));
       mp.on('style.load', () => install(mp));
       if (mp.isStyleLoaded()) install(mp);
       mp.on('load', () => install(mp));
@@ -392,7 +437,7 @@ export default function MapView(props: MapViewProps) {
         if (!id || !canHover) return;
         mp.getCanvas().style.cursor = 'pointer';
         setHover(mp, id);
-        if (!pinnedRef.current) showPopup(mp, id, e.lngLat, false);
+        if (!pinnedRef.current && !propsRef.current.onCellClick) showPopup(mp, id, e.lngLat, false);
       });
       mp.on('mouseleave', 'cells-fill', () => {
         mp.getCanvas().style.cursor = '';
@@ -405,6 +450,11 @@ export default function MapView(props: MapViewProps) {
       mp.on('click', (e) => {
         const hit = mp.getLayer('cells-fill') ? mp.queryRenderedFeatures(e.point, { layers: ['cells-fill'] }) : [];
         const id = hit[0]?.properties?.cell_id as string | undefined;
+        const onCellClick = propsRef.current.onCellClick;
+        if (onCellClick) {
+          onCellClick(id && propsRef.current.fills.has(id) ? id : null, [e.lngLat.lng, e.lngLat.lat]);
+          return;
+        }
         if (id && propsRef.current.fills.has(id)) {
           pin(mp, id, e.lngLat);
         } else {
@@ -462,6 +512,52 @@ export default function MapView(props: MapViewProps) {
     pin(map, props.focus.cellId, c);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.focus]);
+
+  // ---- selection outline -----------------------------------------------------
+  const selectedKey = (props.selected ?? []).join(',');
+  useEffect(() => {
+    const next = props.selected ?? [];
+    const map = mapRef.current;
+    if (map && map.getSource('cells')) {
+      for (const id of selectedRef.current) map.setFeatureState({ source: 'cells', id }, { sel: false });
+      for (const id of next) map.setFeatureState({ source: 'cells', id }, { sel: true });
+    }
+    selectedRef.current = next;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey, ready]);
+
+  // ---- fit to a set of cells ---------------------------------------------------
+  useEffect(() => {
+    const map = mapRef.current;
+    const ids = props.fitTo?.ids ?? [];
+    if (!map || ids.length === 0) return;
+    const b = new maplibregl.LngLatBounds();
+    for (const id of ids) {
+      const c = centroids.get(id);
+      if (c) b.extend(c);
+    }
+    if (b.isEmpty()) return;
+    // pad by roughly half a cell so edge cells stay fully visible
+    const sw = b.getSouthWest();
+    const ne = b.getNorthEast();
+    b.extend([sw.lng - 0.004, sw.lat - 0.003]).extend([ne.lng + 0.004, ne.lat + 0.003]);
+    map.fitBounds(b, { padding: props.padding, maxZoom: ids.length === 1 ? 13.3 : 12.8, duration: 700 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.fitTo?.nonce, ready]);
+
+  // ---- location pin ------------------------------------------------------------
+  const markerKey = props.marker ? props.marker.join(',') : '';
+  useEffect(() => {
+    const map = mapRef.current;
+    markerRef.current?.remove();
+    markerRef.current = null;
+    if (!map || !props.marker) return;
+    const el = document.createElement('div');
+    el.className = 'map-pin';
+    el.setAttribute('aria-hidden', 'true');
+    markerRef.current = new maplibregl.Marker({ element: el }).setLngLat(props.marker).addTo(map);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [markerKey, ready]);
 
   return (
     <div

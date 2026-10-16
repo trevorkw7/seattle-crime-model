@@ -152,3 +152,46 @@ def test_public_job_messages_have_no_paths():
     assert "/home" not in out and "/usr" not in out and "<path>" in out
     assert public_message(None) == ""
     assert len(public_message("x" * 1000)) == 300
+
+
+# ------------------------------------------------------------ live job state
+def _live_state(monkeypatch, tmp_path):
+    import importlib.util
+    from pathlib import Path
+
+    monkeypatch.setenv("SEACRIME_DATA_ROOT", str(tmp_path / "data"))
+    monkeypatch.setenv("SEACRIME_ARTIFACTS_ROOT", str(tmp_path / "artifacts"))
+    spec = importlib.util.spec_from_file_location("live_state", Path(__file__).resolve().parents[1] / "scripts" / "live_state.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_live_state_prune_keeps_latest_snapshot(tmp_path, monkeypatch):
+    ls = _live_state(monkeypatch, tmp_path)
+    raw = tmp_path / "data" / "raw" / "spd_crime"
+    for sid in ("20261001T000000Z", "20261002T000000Z", "20261003T000000Z"):
+        (raw / sid).mkdir(parents=True)
+        (raw / sid / "manifest.json").write_text("{}")
+        (raw / sid / "part-0.csv").write_text("x" * 100)
+    (raw / "partial").mkdir()  # no manifest: not a snapshot, left alone
+    st = ls.status(7)
+    assert st["bootstrap"] and st["retrain"] and not st["has_store"]
+    assert ls.prune()["removed_snapshots"] == 2
+    assert sorted(p.name for p in raw.iterdir()) == ["20261003T000000Z", "partial"]
+
+
+def test_live_state_store_roundtrip(tmp_path, monkeypatch):
+    ls = _live_state(monkeypatch, tmp_path)
+    st = ForecastStore(tmp_path / "data" / "prospective")
+    preds = pd.DataFrame({"cell": [1], "horizon_h": [1], "expected": [0.1], "p_any": [0.09], "lo90": [0], "hi90": [1], "relative_risk": [1.0]})
+    st.freeze(_meta("f1", "2024-05-01T10:05:00+00:00", "2024-05-01T11:00:00+00:00"), preds)
+    arc = tmp_path / "store.tar.gz"
+    ls.pack_store(arc)
+    with pytest.raises(SystemExit):
+        ls.unpack_store(arc)  # never overwrites a live store
+    import shutil
+
+    shutil.rmtree(tmp_path / "data" / "prospective")
+    ls.unpack_store(arc)
+    pd.testing.assert_frame_equal(ForecastStore(tmp_path / "data" / "prospective").load_predictions("f1"), preds)

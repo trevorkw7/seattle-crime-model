@@ -91,6 +91,7 @@ def test_prospective_lifecycle(tmp_path, monkeypatch):
     s = reconcile(cfg.processed_dir, snap2, "s2", pd.Timestamp("2025-03-03T12:00:00Z"))
     assert s["new"] == 200
     assert score_all(cfg) == 4  # 2 models x 2 horizons
+    assert score_all(cfg) == 0  # hourly re-runs against the same snapshot do no work
     sc = store.latest_scores()
     assert set(sc["maturity"]) == {"provisional"}  # < 30 days old: never final
     assert all(m["observed_total"] > 0 for m in sc["metrics"])
@@ -105,3 +106,18 @@ def test_prospective_lifecycle(tmp_path, monkeypatch):
     assert all(v is None or v >= 3 for v in vals)  # small counts suppressed
     for name in ("meta.json", "grid.geojson", "health.json", "evaluation/summary.json"):
         assert (out / name).exists()
+
+    # scheduled live job: no backtest artifacts locally, so backtest sections come from a
+    # previous export while forecasts and scores are fresh
+    base = tmp_path / "base"
+    (base / "evaluation").mkdir(parents=True)
+    (base / "meta.json").write_text(json.dumps({"models": [{"id": "tcn", "label": "TCN", "backtest_only": True}, {"id": "lgbm", "backtest_only": True}]}))
+    (base / "evaluation" / "summary.json").write_text(json.dumps({"backtest": {"rows": [{"model_id": "lgbm"}]}, "ablations": [1],
+                                                                  "prospective": {"rows": [], "timeseries": []}}))
+    live = export_all(cfg, tmp_path / "live", max_live=1, max_replay=0, static_base=base)
+    ev = json.loads((live / "evaluation" / "summary.json").read_text())
+    assert ev["backtest"] == {"rows": [{"model_id": "lgbm"}]} and ev["ablations"] == [1]
+    assert ev["prospective"]["rows"]  # live scores, not the base's empty section
+    models = {m["id"]: m for m in json.loads((live / "meta.json").read_text())["models"]}
+    assert "tcn" in models and not models["lgbm"].get("backtest_only")  # production entry wins
+    assert len(json.loads((live / "forecasts" / "index.json").read_text())["items"]) == 1

@@ -3,7 +3,9 @@
 Area-level, hourly forecasts of **publicly reported** Seattle Police Department
 incidents on a 500 m grid, for 1, 3, 6 and 24-hour horizons, with a
 time-aware evaluation harness, a prospective (frozen-forecast) scoring engine
-and an interactive map.
+and an interactive map. The site's home page answers the everyday question in
+plain language (pick a crime type and a neighborhood, address or your location);
+the full research map lives at `/explore/`.
 
 > Research and public-understanding tool. Outputs are aggregated to grid cells;
 > there are no person-level predictions and no enforcement recommendations.
@@ -64,8 +66,8 @@ identical for all models). Full tables: [reports/backtest_results.md](reports/ba
 | `src/seacrime/evaluation/` | Identical-window backtests, rolling-origin backtests, ablations, lag sensitivity, metrics and bootstrap CIs |
 | `src/seacrime/prospective/` | Production forecasting, immutable forecast store, maturity-aware scoring, replay, hourly cycle |
 | `src/seacrime/export.py`, `api/` | Dashboard JSON export ([contract](docs/API_CONTRACT.md)) and read-only FastAPI |
-| `web/` | Next.js + MapLibre dashboard (static export) |
-| `infra/`, `Dockerfile`, `.github/workflows/` | Terraform (GCP, not applied), Docker, CI, optional scheduled cycle |
+| `web/` | Next.js + MapLibre dashboard (static export): plain-language home page, detailed map, accuracy and status pages |
+| `infra/`, `Dockerfile`, `.github/workflows/` | Terraform (GCP, not applied), Docker, CI, hourly live-forecast workflow (GitHub Actions + Pages) |
 | `configs/` | Main config and GPU job configs |
 | `docs/` | [Methodology](docs/METHODOLOGY.md), [data sources](docs/DATA_SOURCES.md) ([context sources](docs/DATA_SOURCES_CONTEXT.md)), [deployment & costs](docs/DEPLOYMENT.md) |
 
@@ -103,10 +105,33 @@ runs the same code path on CPU in a few minutes.
 ## Deploying the dashboard to Vercel
 
 * **Git integration (recommended):** import this repository in Vercel with *Root Directory* `web`
-  (settings come from `web/vercel.json`). Every push redeploys. The site reads `web/public/data`;
-  without an exported data snapshot it shows clearly labelled demo data.
+  (settings come from `web/vercel.json`). Every push redeploys. The site reads the **live feed**
+  published by the `live-forecast` workflow (below) and falls back to the data snapshot committed in
+  `web/public/data` (real forecasts frozen on 2026-10-15, historical replays and backtest results), and
+  to clearly labelled demo data only if both are missing. Open pages check for newer forecasts every
+  5 minutes. To refresh the bundled snapshot, run a cycle and
+  `python -m seacrime.export --max-live 30 --max-replay 42`, then commit `web/public/data`.
 * **CLI from a machine with the data:** `python -m seacrime.export && web/scripts/deploy-vercel.sh --prod`
   (authenticates with `vercel login` or `VERCEL_TOKEN`), which uploads the static build with the current export.
+
+## Live updates (free, GitHub Actions + GitHub Pages)
+
+`.github/workflows/live-forecast.yml` runs the prospective cycle every hour on GitHub's runners
+(free for public repositories) and publishes the dashboard data to GitHub Pages, at
+`https://<owner>.github.io/<repo>/data/`, where the site picks it up (`NEXT_PUBLIC_LIVE_DATA_BASE`,
+see `web/lib/config.ts`). Each run ingests new Fire/EMS dispatches, weather forecasts and (when the
+publisher has updated) SPD reports and 911 calls, freezes new LightGBM and seasonal-baseline
+forecasts for every category, re-scores earlier forecasts against newly published reports, and
+exports. Production models are retrained weekly.
+
+* **Turn on:** Settings → Pages → Build and deployment → Source: **GitHub Actions**. Until then each
+  run stops after a few seconds. The first run downloads every source and trains the models (about an
+  hour); later runs take a few minutes.
+* **State:** processed data, models and the frozen-forecast store are kept in the Actions cache; the
+  store is also backed up daily as the release asset `forecast-store/forecast-store.tar.gz`.
+* **Turn off:** Actions → live-forecast → *Disable workflow*. GitHub also pauses schedules in
+  repositories with no activity for 60 days.
+* Optional secret `SOCRATA_APP_TOKEN` raises the data.seattle.gov rate limit.
 
 ## Forecast definition (short)
 

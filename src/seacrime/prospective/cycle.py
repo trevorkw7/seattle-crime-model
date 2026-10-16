@@ -2,6 +2,7 @@
 
     python -m seacrime.prospective.cycle            # full cycle
     python -m seacrime.prospective.cycle --no-ingest
+    python -m seacrime.prospective.cycle --models lgbm seasonal --no-export   # scheduled live job
 
 Steps (each logged to the jobs table; a failure in one step is recorded and
 later steps still run when they can):
@@ -73,7 +74,8 @@ def _incremental(cfg: Config, source: str, base: SocrataQuery, ts_field: str, pr
         raise
 
 
-def run_cycle(cfg: Config, ingest: bool = True, categories: list[str] | None = None) -> dict:
+def run_cycle(cfg: Config, ingest: bool = True, categories: list[str] | None = None, models: list[str] | None = None,
+              export: bool = True) -> dict:
     store = ForecastStore(prospective_root(cfg))
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     categories = categories or list(cfg["categories"])
@@ -116,16 +118,17 @@ def run_cycle(cfg: Config, ingest: bool = True, categories: list[str] | None = N
 
         step("ingest_weather_mos", weather)
     step("build_cubes", lambda: {"active_cells": build_all(cfg, extend_to=pd.Timestamp.now("UTC") + pd.Timedelta(hours=27))["active_cells"]})
-    step("hourly_forecast", lambda: {"frozen": issue_forecasts(cfg, categories)})
+    step("hourly_forecast", lambda: {"frozen": issue_forecasts(cfg, categories, models=models)})
     step("score", lambda: {"scored_windows": score_all(cfg)})
 
-    def export():
+    def export_step():
         from ..export import export_all
 
         out = export_all(cfg)
         return {"exported_files": sum(1 for f in out.rglob("*") if f.is_file())}
 
-    step("export", export)
+    if export:
+        step("export", export_step)
     return results
 
 
@@ -133,12 +136,20 @@ def main(argv=None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-ingest", action="store_true")
     ap.add_argument("--categories", nargs="*")
+    ap.add_argument("--models", nargs="*", help="production models to issue (default: all in the registry)")
+    ap.add_argument("--no-export", action="store_true", help="skip the dashboard export step (run `python -m seacrime.export` separately)")
+    ap.add_argument("--fail-on", nargs="*", help="exit non-zero only when these steps fail (default: any step); "
+                    "other failures are still recorded in the jobs table and health.json")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    res = run_cycle(load_config(), ingest=not args.no_ingest, categories=args.categories)
+    res = run_cycle(load_config(), ingest=not args.no_ingest, categories=args.categories, models=args.models or None,
+                    export=not args.no_export)
     print(json.dumps(res, indent=2, default=str)[:4000])
-    if any(isinstance(v, dict) and "error" in v for v in res.values()):
-        raise SystemExit(1)
+    failed = [k for k, v in res.items() if isinstance(v, dict) and "error" in v]
+    if args.fail_on is not None:
+        failed = [k for k in failed if k in args.fail_on]
+    if failed:
+        raise SystemExit(f"failed steps: {', '.join(failed)}")
 
 
 if __name__ == "__main__":

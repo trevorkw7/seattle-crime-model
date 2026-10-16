@@ -21,7 +21,13 @@ const VIEWPORTS = {
   mobile: { width: 390, height: 844 },
 } as const;
 
-const TOLERATED = [/\/data\/meta\.json/, /tiles\.openfreemap\.org/, /openfreemap/];
+const TOLERATED = [/\/data\/meta\.json/, /tiles\.openfreemap\.org/, /openfreemap/, /github\.io/];
+
+// Tests run against the data bundled in the build: the hourly live feed (GitHub Pages) is blocked
+// so results do not depend on what has been published.
+test.beforeEach(async ({ page }) => {
+  await page.route(/github\.io/, (route) => route.abort());
+});
 
 function watchConsole(page: Page) {
   const errors: string[] = [];
@@ -53,9 +59,46 @@ for (const [name, viewport] of Object.entries(VIEWPORTS)) {
       colorScheme: 'light',
     });
 
-    test('map page', async ({ page }) => {
+    test('home page (plain-language view)', async ({ page }) => {
       const log = watchConsole(page);
       await page.goto('/');
+      await waitForMap(page);
+      await expect(page.getByRole('heading', { name: 'Where crime reports are expected in Seattle' })).toBeVisible();
+      const answer = page.getByRole('region', { name: 'Forecast summary' });
+      await expect(answer).toContainText('All of Seattle');
+      await expect(answer).toContainText(/expected/);
+      await page.screenshot({ path: path.join(SHOTS, `home-${name}.png`) });
+
+      // neighborhood search
+      await page.getByRole('combobox', { name: 'Neighborhood or address' }).fill('capitol');
+      await expect(page.getByRole('option', { name: 'Capitol Hill' })).toBeVisible();
+      await page.keyboard.press('Enter');
+      await expect(answer).toContainText('Capitol Hill');
+      await expect(page).toHaveURL(/area=Capitol(%20|\+)Hill/);
+
+      // crime type and time window
+      await page.getByText('Violent crime', { exact: true }).click();
+      await page.getByText('Next 24 hours', { exact: true }).click();
+      await expect(page).toHaveURL(/cat=violent/);
+      await expect(page).toHaveURL(/h=24/);
+      await expect(answer).toContainText('violent crime');
+      await page.screenshot({ path: path.join(SHOTS, `home-${name}-area.png`), fullPage: name === 'mobile' });
+
+      // tapping a square shows that square
+      await page.getByTestId('map').scrollIntoViewIfNeeded();
+      const box = (await page.getByTestId('map').boundingBox())!;
+      if (name === 'mobile') await page.touchscreen.tap(box.x + box.width * 0.5, box.y + box.height * 0.5);
+      else await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
+      await expect(answer).toContainText(/this square|Outside the forecast area/);
+      await answer.getByRole('button', { name: 'Back to all of Seattle' }).click();
+      await expect(answer).toContainText('All of Seattle');
+
+      expect(log.errors, `console errors:\n${log.errors.join('\n')}`).toEqual([]);
+    });
+
+    test('map page', async ({ page }) => {
+      const log = watchConsole(page);
+      await page.goto('/explore/');
       await waitForMap(page);
       await expect(page.getByRole('complementary', { name: 'Map controls' })).toBeVisible();
       if (await page.getByTestId('demo-banner').count()) {
@@ -83,7 +126,7 @@ for (const [name, viewport] of Object.entries(VIEWPORTS)) {
       }
 
       // About drawer
-      await page.getByRole('button', { name: /About this map/ }).first().click();
+      await page.getByRole('button', { name: 'About this project' }).click();
       await expect(page.getByRole('dialog', { name: 'About this map' })).toBeVisible();
       await page.waitForTimeout(400); // let the slide-in animation finish
       await page.screenshot({ path: path.join(SHOTS, `about-${name}.png`) });
@@ -95,7 +138,7 @@ for (const [name, viewport] of Object.entries(VIEWPORTS)) {
 
     test('map page — scored past forecast with overlays', async ({ page }) => {
       const log = watchConsole(page);
-      await page.goto('/');
+      await page.goto('/explore/');
       await waitForMap(page);
       // pick the oldest scored run for the default model/category via the index
       const base = await page.evaluate(() => (document.querySelector('[data-testid="demo-banner"]') ? '/demo-data' : '/data'));
@@ -104,7 +147,7 @@ for (const [name, viewport] of Object.entries(VIEWPORTS)) {
         i.status.startsWith('scored') && i.category === 'property',
       );
       test.skip(!run, 'no scored forecast published');
-      await page.goto(`/?cat=property&model=${run.model_id}&h=24&metric=expected&fc=${run.forecast_id}&hist=1&period=last_30d`);
+      await page.goto(`/explore/?cat=property&model=${run.model_id}&h=24&metric=expected&fc=${run.forecast_id}&hist=1&period=last_30d`);
       await waitForMap(page);
       if (name === 'mobile') await page.getByRole('button', { name: /More/ }).click();
       await expect(page.getByText('Forecast vs. reported')).toBeVisible();
@@ -151,13 +194,13 @@ test.describe('contract variants', () => {
       if (body.score) body.provenance = { ...body.provenance, kind: 'replay' };
       await route.fulfill({ response: res, json: body });
     });
-    await page.goto('/');
+    await page.goto('/explore/');
     await waitForMap(page);
     const base = await page.evaluate(() => (document.querySelector('[data-testid="demo-banner"]') ? '/demo-data' : '/data'));
     const index = await (await page.request.get(`${base}/forecasts/index.json`)).json();
     const run = index.items.find((i: { status: string }) => i.status === 'scored_provisional');
     test.skip(!run, 'no scored forecast published');
-    await page.goto(`/?cat=${run.category}&model=${run.model_id}&h=24&fc=${run.forecast_id}`);
+    await page.goto(`/explore/?cat=${run.category}&model=${run.model_id}&h=24&fc=${run.forecast_id}`);
     await waitForMap(page);
     await expect(page.locator('.chip-replay').first()).toBeVisible();
     await expect(page.locator('.tick.is-replay').first()).toBeAttached();

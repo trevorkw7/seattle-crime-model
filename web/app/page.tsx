@@ -1,5 +1,5 @@
-import { MapExplorer } from '@/components/map/MapExplorer';
+import { SimpleHome } from '@/components/simple/SimpleHome';
 
-export default function MapPage() {
-  return <MapExplorer />;
+export default function HomePage() {
+  return <SimpleHome />;
 }

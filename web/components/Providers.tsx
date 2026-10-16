@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { CONFIGURED_DATA_BASE, DEMO_DATA_BASE } from '@/lib/config';
+import { CONFIGURED_DATA_BASE, DEMO_DATA_BASE, LIVE_DATA_BASE, REFRESH_MS } from '@/lib/config';
 import { fetchJson } from '@/lib/fetch';
 import type { Theme } from '@/lib/colors';
 import type { Meta } from '@/lib/types';
@@ -16,11 +16,15 @@ export type DataState =
       status: 'ready';
       base: string;
       meta: Meta;
-      /** true when the configured base had no meta.json and we fell back to /demo-data */
+      /** true when no published data was found and we fell back to /demo-data */
       fallback: boolean;
       /** true whenever the data must be presented as synthetic */
       demo: boolean;
       configuredBase: string;
+      /** where the data came from: the hourly live feed, the snapshot bundled with the site, or demo fixtures */
+      source: 'live' | 'bundled' | 'demo';
+      /** changes whenever newer data is published; appended to document URLs to bypass caches */
+      version: string;
     }
   | { status: 'error'; message: string };
 
@@ -31,37 +35,80 @@ function looksLikeMeta(m: unknown): m is Meta {
   return !!x && Array.isArray(x.categories) && Array.isArray(x.models) && Array.isArray(x.horizons_h);
 }
 
+async function tryMeta(base: string, bust: string): Promise<Meta | null> {
+  try {
+    const m = await fetchJson<Meta>(`${base}/meta.json${bust}`, { noCache: true });
+    return looksLikeMeta(m) ? m : null;
+  } catch {
+    return null;
+  }
+}
+
+const generatedAt = (m: Meta) => Date.parse(m.provenance?.generated_at ?? '') || 0;
+
+/** Prefer the live feed when it is at least as new as the bundled snapshot; demo fixtures last. */
+async function resolveData(): Promise<DataState> {
+  // bucket the cache-buster so CDNs still absorb most requests
+  const bust = `?t=${Math.floor(Date.now() / 120000)}`;
+  const [live, bundled] = await Promise.all([
+    LIVE_DATA_BASE && LIVE_DATA_BASE !== CONFIGURED_DATA_BASE ? tryMeta(LIVE_DATA_BASE, bust) : Promise.resolve(null),
+    tryMeta(CONFIGURED_DATA_BASE, bust),
+  ]);
+  const ready = (base: string, meta: Meta, source: 'live' | 'bundled'): DataState => ({
+    status: 'ready',
+    base,
+    meta,
+    fallback: false,
+    demo: meta.provenance?.kind === 'demo' || base === DEMO_DATA_BASE,
+    configuredBase: CONFIGURED_DATA_BASE,
+    source: meta.provenance?.kind === 'demo' ? 'demo' : source,
+    version: meta.provenance?.generated_at ?? '',
+  });
+  if (live && live.provenance?.kind !== 'demo' && (!bundled || generatedAt(live) >= generatedAt(bundled))) return ready(LIVE_DATA_BASE, live, 'live');
+  if (bundled) return ready(CONFIGURED_DATA_BASE, bundled, 'bundled');
+  const meta = await fetchJson<Meta>(`${DEMO_DATA_BASE}/meta.json`);
+  if (!looksLikeMeta(meta)) throw new Error('demo meta.json is malformed');
+  return {
+    status: 'ready',
+    base: DEMO_DATA_BASE,
+    meta,
+    fallback: true,
+    demo: true,
+    configuredBase: CONFIGURED_DATA_BASE,
+    source: 'demo',
+    version: meta.provenance?.generated_at ?? '',
+  };
+}
+
 function DataProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<DataState>({ status: 'loading' });
 
   useEffect(() => {
     let alive = true;
-    (async () => {
+    const load = async (initial: boolean) => {
       try {
-        const meta = await fetchJson<Meta>(`${CONFIGURED_DATA_BASE}/meta.json`, { noCache: true });
-        if (!looksLikeMeta(meta)) throw new Error('meta.json does not match the contract');
+        const next = await resolveData();
         if (!alive) return;
-        setState({
-          status: 'ready',
-          base: CONFIGURED_DATA_BASE,
-          meta,
-          fallback: false,
-          demo: meta.provenance?.kind === 'demo' || CONFIGURED_DATA_BASE === DEMO_DATA_BASE,
-          configuredBase: CONFIGURED_DATA_BASE,
-        });
-      } catch {
-        try {
-          const meta = await fetchJson<Meta>(`${DEMO_DATA_BASE}/meta.json`);
-          if (!looksLikeMeta(meta)) throw new Error('demo meta.json is malformed');
-          if (!alive) return;
-          setState({ status: 'ready', base: DEMO_DATA_BASE, meta, fallback: true, demo: true, configuredBase: CONFIGURED_DATA_BASE });
-        } catch (e) {
-          if (alive) setState({ status: 'error', message: e instanceof Error ? e.message : String(e) });
-        }
+        setState((cur) =>
+          // keep the current object (and every view's documents) unless something new was published
+          !initial && cur.status === 'ready' && next.status === 'ready' && cur.base === next.base && cur.version === next.version ? cur : next,
+        );
+      } catch (e) {
+        if (alive && initial) setState({ status: 'error', message: e instanceof Error ? e.message : String(e) });
       }
-    })();
+    };
+    void load(true);
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void load(false);
+    }, REFRESH_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load(false);
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       alive = false;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
 
@@ -76,7 +123,8 @@ export const useData = () => useContext(DataContext);
  */
 export function useDoc<T>(relPath: string | null) {
   const data = useData();
-  const url = data.status === 'ready' && relPath ? `${data.base}/${relPath}` : null;
+  const url =
+    data.status === 'ready' && relPath ? `${data.base}/${relPath}${data.version ? `?v=${encodeURIComponent(data.version)}` : ''}` : null;
   const [state, setState] = useState<{ key: string | null; data: T | null; error: Error | null }>({
     key: null,
     data: null,
