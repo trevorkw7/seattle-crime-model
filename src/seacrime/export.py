@@ -486,8 +486,9 @@ def export_all(cfg: Config, out: Path | None = None, max_live: int = 400, max_re
     ex = Exporter(cfg, out)
     meta = ex.meta(bts)
     if base_meta:
+        # models evaluated in the research runs but not issuing live forecasts here
         have = {m["id"] for m in meta["models"]}
-        meta["models"] += [m for m in base_meta.get("models", []) if m.get("backtest_only") and m["id"] not in have]
+        meta["models"] += [{**m, "backtest_only": True, "is_default": False} for m in base_meta.get("models", []) if m["id"] not in have]
     _write(out / "meta.json", meta)
     _write(out / "grid.geojson", ex.grid_geojson())
     _write(out / "forecasts" / "index.json", ex.forecasts(max_live=max_live, max_replay=max_replay))

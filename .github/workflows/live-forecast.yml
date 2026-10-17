@@ -138,7 +138,7 @@ jobs:
         if: steps.plan.outputs.retrain == 'true' || inputs.retrain == true
         run: |
           python -m seacrime.build
-          python -m seacrime.train
+          python -m seacrime.train --models seasonal lgbm
 
       - name: Forecast cycle (ingest, build, freeze, score)
         id: cycle

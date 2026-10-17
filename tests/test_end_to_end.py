@@ -111,7 +111,8 @@ def test_prospective_lifecycle(tmp_path, monkeypatch):
     # previous export while forecasts and scores are fresh
     base = tmp_path / "base"
     (base / "evaluation").mkdir(parents=True)
-    (base / "meta.json").write_text(json.dumps({"models": [{"id": "tcn", "label": "TCN", "backtest_only": True}, {"id": "lgbm", "backtest_only": True}]}))
+    (base / "meta.json").write_text(json.dumps({"models": [{"id": "tcn", "label": "TCN", "backtest_only": True}, {"id": "lgbm", "backtest_only": True},
+                                                          {"id": "hotspot", "label": "Hotspot", "is_default": False}]}))
     (base / "evaluation" / "summary.json").write_text(json.dumps({"backtest": {"rows": [{"model_id": "lgbm"}]}, "ablations": [1],
                                                                   "prospective": {"rows": [], "timeseries": []}}))
     live = export_all(cfg, tmp_path / "live", max_live=1, max_replay=0, static_base=base)
@@ -120,4 +121,5 @@ def test_prospective_lifecycle(tmp_path, monkeypatch):
     assert ev["prospective"]["rows"]  # live scores, not the base's empty section
     models = {m["id"]: m for m in json.loads((live / "meta.json").read_text())["models"]}
     assert "tcn" in models and not models["lgbm"].get("backtest_only")  # production entry wins
+    assert models["hotspot"]["backtest_only"]  # not trained for live use here, so research-only
     assert len(json.loads((live / "forecasts" / "index.json").read_text())["items"]) == 1
