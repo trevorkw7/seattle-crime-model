@@ -8,7 +8,9 @@ configuration below is an alternative that has not been applied.
 
 ## Live forecasts on GitHub Actions + Pages (free)
 
-`.github/workflows/live-forecast.yml`, every hour at :23:
+`.github/workflows/live-forecast.yml`, every hour (each run starts the next one at
+hh:20 because GitHub's cron fires only on a best-effort basis; the `23 * * * *`
+cron is a backstop, and pushes to `main` that touch the pipeline start a run):
 
 1. **gate** — checks that GitHub Pages publishes from Actions; otherwise ends.
 2. **cycle** — restores state from the Actions cache (processed data, production
@@ -20,14 +22,18 @@ configuration below is an alternative that has not been applied.
    from the committed snapshot because the multi-hour backtests do not run here).
    Older raw snapshots are pruned before the cache is saved.
 3. **deploy** — publishes `_site` to GitHub Pages.
+4. **next** — waits for the next hh:20 and dispatches the following run. The
+   concurrency group allows one run in progress and one waiting, so the chain
+   cannot multiply; cancelling a run stops the chain until the cron restarts it.
 
 A failed data source is recorded in `health.json` (Status page) without failing
 the run; the run fails (and GitHub notifies the owner) only when cubes or
 forecasts could not be produced, and the previous forecasts stay published.
 
-Runner time: about 10 minutes per hourly run once state is cached (the daily SPD
-refresh adds a few minutes); the first run takes about an hour. Public
-repositories do not pay for GitHub-hosted runner minutes.
+Runner time: about 10 minutes of work per hourly run once state is cached (the
+daily SPD refresh adds a few minutes) plus the waiting `next` job; the first run
+takes about an hour. Public repositories do not pay for GitHub-hosted runner
+minutes.
 
 ## Local (verified)
 

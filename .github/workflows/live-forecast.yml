@@ -6,9 +6,17 @@
 # from https://<owner>.github.io/<repo>/data/ (web/lib/config.ts) and falls back to the
 # snapshot bundled in web/public/data when the feed is unavailable.
 #
+# Cadence: GitHub runs scheduled workflows on a best-effort basis (in this repository
+# the hourly cron fired only every 3-5 hours), so each run ends by waiting for the next
+# hh:20 and starting the following run itself. The cron remains as a backstop that
+# restarts the chain if it ever breaks; a push to main that changes the pipeline
+# starts a run straight away. The concurrency group keeps at most one run going and
+# one waiting, so the chain cannot multiply.
+#
 # Turn on:  Settings → Pages → Build and deployment → Source: "GitHub Actions".
 #           Until then every run stops after a few seconds.
-# Turn off: Actions → live-forecast → "Disable workflow".
+# Turn off: Actions → live-forecast → "Disable workflow" (cancelling the run that is
+#           in progress also stops the chain until the next scheduled run).
 #
 # State between runs lives in the Actions cache (processed data, production models
 # and the frozen-forecast store; cubes are rebuilt each run). The store is also backed
@@ -21,6 +29,13 @@ name: live-forecast
 on:
   schedule:
     - cron: "23 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/live-forecast.yml"
+      - "src/**"
+      - "configs/**"
+      - "scripts/live_state.py"
   workflow_dispatch:
     inputs:
       retrain:
@@ -123,7 +138,7 @@ jobs:
         if: steps.plan.outputs.retrain == 'true' || inputs.retrain == true
         run: |
           python -m seacrime.build
-          python -m seacrime.train
+          python -m seacrime.train --models seasonal lgbm
 
       - name: Forecast cycle (ingest, build, freeze, score)
         id: cycle
@@ -187,3 +202,23 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  next:
+    # starts the following run at the next hh:20 (see "Cadence" above)
+    needs: [gate, cycle, deploy]
+    if: ${{ !cancelled() && needs.gate.outputs.enabled == 'true' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      actions: write
+    steps:
+      - name: Wait for the next hourly slot, then start the next run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          now=$(date -u +%s)
+          target=$(( now - now % 3600 + 20 * 60 ))
+          while [ "$target" -le $(( now + 300 )) ]; do target=$(( target + 3600 )); done
+          echo "Next run starts at $(date -u -d "@$target" +%H:%M) UTC"
+          sleep $(( target - now ))
+          gh workflow run live-forecast.yml --repo "$GITHUB_REPOSITORY" --ref main

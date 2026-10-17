@@ -129,6 +129,9 @@ exports. Production models are retrained weekly.
   hour); later runs take a few minutes.
 * **State:** processed data, models and the frozen-forecast store are kept in the Actions cache; the
   store is also backed up daily as the release asset `forecast-store/forecast-store.tar.gz`.
+* **Cadence:** GitHub runs cron schedules on a best-effort basis (here the hourly cron fired only every
+  3–5 hours), so each run waits for the next hh:20 and starts the following run itself; the cron is a
+  backstop and a push to `main` that changes the pipeline starts a run immediately.
 * **Turn off:** Actions → live-forecast → *Disable workflow*. GitHub also pauses schedules in
   repositories with no activity for 60 days.
 * Optional secret `SOCRATA_APP_TOKEN` raises the data.seattle.gov rate limit.
